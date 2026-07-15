@@ -1,0 +1,1217 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal CRM</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;1,100;1,200;1,300;1,400;1,500;1,600;1,700&family=Poppins:ital,wght@0,100;0,200;0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,100;1,200;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap"
+        rel="stylesheet">
+    <!-- Include Custom Styles -->
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Include Feather Icons for clean, crisp, minimalist icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    <!-- Include SortableJS for drag and drop Kanban boards -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <!-- Include Chart.js for visualizations -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Facebook SDK for Javascript -->
+    <div id="fb-root"></div>
+    <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+</head>
+
+<body>
+
+    <!-- Sidebar Navigation -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <i data-feather="box"></i> SimpleFunnel CRM
+        </div>
+
+        <div class="nav-label">Main Menu</div>
+        <a href="#" class="nav-item" data-view="dashboard">
+            <i data-feather="grid"></i> Dashboard
+        </a>
+        <a href="#" class="nav-item active" data-view="leads">
+            <i data-feather="users"></i> Leads
+        </a>
+        <a href="#" class="nav-item" data-view="automations">
+            <i data-feather="zap"></i> Automations
+        </a>
+        <a href="#" class="nav-item" data-view="activity">
+            <i data-feather="activity"></i> Activity Feed
+        </a>
+        <a href="#" class="nav-item" data-view="flows">
+            <i data-feather="git-merge"></i> Flows
+        </a>
+
+        <div class="nav-label">Settings</div>
+        <a href="#" class="nav-item" data-view="integrations">
+            <i data-feather="link"></i> Integrations
+        </a>
+        <a href="#" class="nav-item" data-view="team">
+            <i data-feather="users"></i> Team
+        </a>
+
+        <div class="sidebar-footer">
+            <a href="#" class="nav-item">
+                <i data-feather="settings"></i> My Account
+            </a>
+        </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="main-wrapper">
+        <!-- Global Header -->
+        <header class="header">
+            <div class="search-bar">
+                <i data-feather="search"></i>
+                <input type="text" placeholder="Search leads, tags, or phone numbers...">
+            </div>
+
+            <div class="user-profile">
+                <div class="notifications">
+                    <i data-feather="bell" class="icon-action"></i>
+                </div>
+                <div class="avatar">PP</div>
+            </div>
+        </header>
+
+        <!-- Scrollable Content Area -->
+        <div class="content-area">
+
+            <!-- LEADS VIEW (Default Active) -->
+            <section id="leads" class="view-section active">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Leads Management</h1>
+                        <p>Manage, assign, and track incoming leads from all your sources.</p>
+                    </div>
+                    <div class="section-actions">
+                        <div class="view-controls">
+                            <button class="btn view-toggle active" data-target="leads-table-view"><i
+                                    data-feather="list"></i></button>
+                            <button class="btn view-toggle" data-target="leads-board-view"><i
+                                    data-feather="columns"></i></button>
+                        </div>
+                        <button class="btn btn-secondary">
+                            <i data-feather="filter"></i> Filters
+                        </button>
+                        <button class="btn btn-primary" onclick="alert('Importing leads from Meta integration...')">
+                            <i data-feather="download"></i> Import from Meta
+                        </button>
+                        <button class="btn btn-primary" id="addLeadBtn">
+                            <i data-feather="plus"></i> Add Lead
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LIST VIEW -->
+                <div id="leads-table-view" class="leads-view-container active">
+                    <div class="card">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name / Contact</th>
+                                    <th>Source</th>
+                                    <th>Status</th>
+                                    <th>Assigned To</th>
+                                    <th>Added Date</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>
+                                        <div class="table-user">
+                                            <div class="avatar avatar-table">
+                                                AS</div>
+                                            <div>
+                                                Alice Smith
+                                                <p>+1 (555) 019-2391</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="source-label">
+                                            <i data-feather="facebook"></i> Meta Lead Ad
+                                        </div>
+                                    </td>
+                                    <td><span class="badge new">New</span></td>
+                                    <td>Unassigned</td>
+                                    <td><span class="text-secondary">Today, 10:24 AM</span></td>
+                                    <td class="text-right">
+                                        <button class="btn btn-secondary btn-sm">Assign</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="table-user">
+                                            <div class="avatar avatar-table">
+                                                JB</div>
+                                            <div>
+                                                Jason Bourne
+                                                <p>jason@example.com</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="source-label text-secondary">
+                                            <i data-feather="globe" class="text-muted"></i> Website Form
+                                        </div>
+                                    </td>
+                                    <td><span class="badge contacted">Contacted</span></td>
+                                    <td>Pranav Patil</td>
+                                    <td><span class="text-secondary">Yesterday</span></td>
+                                    <td class="text-right">
+                                        <button class="btn btn-secondary btn-sm">View</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>
+                                        <div class="table-user">
+                                            <div class="avatar avatar-table">
+                                                SR</div>
+                                            <div>
+                                                Sarah Roberts
+                                                <p>+44 7911 123456</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="source-label">
+                                            <i data-feather="facebook"></i> Meta Lead Ad
+                                        </div>
+                                    </td>
+                                    <td><span class="badge new">New</span></td>
+                                    <td>Unassigned</td>
+                                    <td><span class="text-secondary">Oct 24, 2026</span></td>
+                                    <td class="text-right">
+                                        <button class="btn btn-secondary btn-sm">Assign</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination Controls -->
+                    <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding: 0 16px;">
+                        <p class="text-secondary" id="pagination-status" style="font-size: 14px;">Showing 0 leads</p>
+                        <div class="pagination-btns" style="display: flex; gap: 8px;">
+                            <button class="btn btn-secondary btn-sm" id="prevPageBtn" onclick="changePage(-1)" disabled>
+                                <i data-feather="chevron-left"></i> Previous
+                            </button>
+                            <button class="btn btn-secondary btn-sm" id="nextPageBtn" onclick="changePage(1)">
+                                Next <i data-feather="chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BOARD VIEW (Kanban) -->
+                <div id="leads-board-view" class="leads-view-container kanban-board">
+                <!-- Kanban Board View -->
+                <div id="leads-board-view" class="kanban-board" style="display: none;">
+                    <!-- Dynamically populated by app.js -->
+                </div>
+            </section>
+
+            <!-- FLOWS VIEW -->
+            <section id="flows" class="view-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Pipeline Flows</h1>
+                        <p>Customize your lead journey. Drag to reorder stages between New and Closed.</p>
+                    </div>
+                    <button class="btn btn-primary" onclick="openAddStageModal()">
+                        <i data-feather="plus"></i> Add Stage
+                    </button>
+                </div>
+
+                <!-- Locked First Stage -->
+                <div class="flows-container">
+                    <div id="flows-locked-first" class="flows-locked-stage">
+                        <!-- Rendered by JS -->
+                    </div>
+                    <div id="flows-list" class="flows-grid">
+                        <!-- Draggable middle stages rendered by JS -->
+                    </div>
+                    <div id="flows-locked-last" class="flows-locked-stage">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Add Stage Modal -->
+            <div id="addStageModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2>Add New Stage</h2>
+                        <button class="modal-close" onclick="closeAddStageModal()">
+                            <i data-feather="x"></i>
+                        </button>
+                    </div>
+                    <form id="addStageForm" onsubmit="submitNewStage(event)">
+                        <div class="form-group">
+                            <label for="stageName">Stage Name</label>
+                            <input type="text" id="stageName" placeholder="e.g. On Trial, Follow Up" required>
+                        </div>
+                        <div class="form-group">
+                            <label>Pick a Color</label>
+                            <div class="color-presets" id="colorPresets">
+                                <!-- Populated by JS -->
+                            </div>
+                            <div class="color-picker-row" style="margin-top: 15px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="color" id="stageColor" value="#8b5cf6" class="color-input">
+                                    <span class="color-hex" id="stageColorHex">#8b5cf6</span>
+                                </div>
+                                <span style="font-size: 11px; color: var(--text-muted);">Custom color</span>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary" style="width: 100%; margin-top: 24px; height: 48px; justify-content: center;">
+                            <i data-feather="plus"></i> Create Pipeline Stage
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- AUTOMATIONS VIEW -->
+            <section id="automations" class="view-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Automations</h1>
+                        <p>Configure automatic actions like WhatsApp messages and Email drips triggered by lead events.
+                        </p>
+                    </div>
+                    <div class="section-actions">
+                        <button class="btn btn-primary" id="createAutomationBtn">
+                            <i data-feather="plus"></i> Create Automation
+                        </button>
+                    </div>
+                </div>
+
+                <!-- LIST VIEW -->
+                <div class="automations-grid" id="automation-list-view">
+                    <!-- WhatsApp Automation Card -->
+                    <div class="automation-card">
+                        <div class="automation-card-header">
+                            <div class="automation-icon">
+                                <i data-feather="message-circle"></i>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div>
+                            <div class="automation-title">WhatsApp Welcome Message</div>
+                            <div class="automation-desc">Instantly send a greeting template via WhatsApp when a new Meta
+                                Lead is imported.</div>
+                        </div>
+                        <div class="automation-stats">
+                            <div><span>342</span> Triggered</div>
+                            <div><span>98%</span> Delivery Rate</div>
+                        </div>
+                    </div>
+
+                    <!-- Email Automation Card -->
+                    <div class="automation-card">
+                        <div class="automation-card-header">
+                            <div class="automation-icon">
+                                <i data-feather="mail"></i>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div>
+                            <div class="automation-title">Follow-up Email Sequence</div>
+                            <div class="automation-desc">Drip email campaign targeting leads who have been in 'New'
+                                status for over 2 days.</div>
+                        </div>
+                        <div class="automation-stats">
+                            <div><span>1.2k</span> Sent</div>
+                            <div><span>42%</span> Open Rate</div>
+                        </div>
+                    </div>
+
+                    <!-- Assignment Automation Card -->
+                    <div class="automation-card">
+                        <div class="automation-card-header">
+                            <div class="automation-icon">
+                                <i data-feather="users"></i>
+                            </div>
+                            <label class="toggle">
+                                <input type="checkbox">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                        <div>
+                            <div class="automation-title">Round Robin Assignment</div>
+                            <div class="automation-desc">Automatically rotate and distribute new imported leads equally
+                                among the sales team.</div>
+                        </div>
+                        <div class="automation-stats">
+                            <div><span>Paused</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BUILDER VIEW -->
+                <div id="automation-builder-view" class="builder-container" style="display: none;">
+                    <div class="builder-header">
+                        <button class="btn-text" id="backToAutomations">
+                            <i data-feather="arrow-left"></i> Back to Automations
+                        </button>
+                        <div class="builder-progress">
+                            <div class="progress-step active" data-step="1"><span>1</span> Trigger</div>
+                            <div class="progress-line"></div>
+                            <div class="progress-step" data-step="2"><span>2</span> Action</div>
+                            <div class="progress-line"></div>
+                            <div class="progress-step" data-step="3"><span>3</span> Setup</div>
+                        </div>
+                    </div>
+
+                    <div class="builder-layout">
+                        <div class="builder-flow">
+                            <!-- Step 1: Trigger -->
+                            <div class="builder-step active" id="step1">
+                                <h3 class="step-title">When this happens...</h3>
+                                <div class="selection-grid">
+                                    <div class="selection-card" data-trigger="new_lead">
+                                        <div class="selection-icon"><i data-feather="user-plus"></i></div>
+                                        <div class="selection-text">
+                                            <h4>New Lead Added</h4>
+                                            <p>Triggered when a lead is imported or added.</p>
+                                        </div>
+                                    </div>
+                                    <div class="selection-card" data-trigger="status_change">
+                                        <div class="selection-icon"><i data-feather="refresh-cw"></i></div>
+                                        <div class="selection-text">
+                                            <h4>Status Changed</h4>
+                                            <p>Triggered on pipeline stage moves.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-connector"></div>
+
+                            <!-- Step 2: Action Selection -->
+                            <div class="builder-step disabled" id="step2">
+                                <h3 class="step-title">Do this...</h3>
+                                <div class="selection-grid">
+                                    <div class="selection-card" data-action="send_whatsapp">
+                                        <div class="selection-icon"><i data-feather="message-circle"></i></div>
+                                        <div class="selection-text">
+                                            <h4>Send WhatsApp</h4>
+                                            <p>Send a pre-defined message template.</p>
+                                        </div>
+                                    </div>
+                                    <div class="selection-card" data-action="send_email">
+                                        <div class="selection-icon"><i data-feather="mail"></i></div>
+                                        <div class="selection-text">
+                                            <h4>Send Email</h4>
+                                            <p>Send a standard email sequence.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2.5: Action Settings (Dynamic) -->
+                            <div class="builder-step disabled" id="step-settings" style="display: none; margin-top: 24px;">
+                                <h3 class="step-title">Action Settings</h3>
+                                
+                                <!-- WhatsApp Settings -->
+                                <div id="settings-whatsapp" class="settings-panel" style="display: none;">
+                                    <div class="form-group">
+                                        <label>WhatsApp Message</label>
+                                        <textarea id="waMessage" placeholder="Hi {{name}}! 👋 Thanks for reaching out. How can we help?"></textarea>
+                                        <div class="variable-legend">
+                                            <span>Available Tags:</span>
+                                            <code title="Lead's Full Name">{{name}}</code>
+                                            <code title="Lead's Email">{{email}}</code>
+                                            <code title="Lead's Source">{{source}}</code>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Email Settings -->
+                                <div id="settings-email" class="settings-panel" style="display: none;">
+                                    <div class="form-group">
+                                        <label>Subject Line</label>
+                                        <input type="text" id="emailSubject" placeholder="Welcome to our platform!">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Email Body</label>
+                                        <textarea id="emailBody" rows="4" placeholder="Hi {{name}}, thanks for reaching out!"></textarea>
+                                        <div class="variable-legend">
+                                            <span>Available Tags:</span>
+                                            <code title="Lead's Full Name">{{name}}</code>
+                                            <code title="Lead's Email">{{email}}</code>
+                                            <code title="Lead's Source">{{source}}</code>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="step-connector"></div>
+
+                            <!-- Step 3: Configure -->
+                            <div class="builder-step disabled" id="step3">
+                                <h3 class="step-title">Finalize</h3>
+                                <div class="config-panel card">
+                                    <div class="form-group">
+                                        <label>Automation Name</label>
+                                        <input type="text" id="automationName" placeholder="e.g. Meta Welcome Flow">
+                                    </div>
+                                    <button class="btn btn-primary btn-full" id="saveAutomation">Activate Automation</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sidebar Preview -->
+                        <div class="builder-preview" id="previewArea" style="display: none;">
+                            <div class="preview-sticky">
+                                <div class="preview-label">Live Preview</div>
+                                <div class="mobile-mock">
+                                    <div class="mobile-header">
+                                        <div class="mobile-status">9:41</div>
+                                        <div class="mobile-name">SimpleFunnel CRM</div>
+                                    </div>
+                                    <div class="mobile-screen">
+                                        <div class="chat-bubble left" id="previewBubble">
+                                            Select a template to see preview...
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- DASHBOARD VIEW -->
+            <section id="dashboard" class="view-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Dashboard overview</h1>
+                        <p>High level insights of your CRM pipeline and lead conversion.</p>
+                    </div>
+                    <div class="section-actions">
+                        <select id="dashboardRange" class="btn btn-secondary" style="padding: 0 12px; height: 40px;">
+                            <option value="7d">Last 7 Days</option>
+                            <option value="30d">Last 30 Days</option>
+                            <option value="90d">Last 90 Days</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="dashboard-grid">
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3 class="card-title">Lead Sources</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="sourceChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card chart-card">
+                        <div class="card-header">
+                            <h3 class="card-title">Weekly Conversions</h3>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="conversionChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="stats-card-row">
+                        <div class="card stat-mini-card">
+                            <div class="text-muted">Total Leads</div>
+                            <div class="stat-value" id="stat-total-leads">0</div>
+                            <div class="stat-trend" id="trend-total-leads">--</div>
+                        </div>
+                        <div class="card stat-mini-card">
+                            <div class="text-muted">Active Deals</div>
+                            <div class="stat-value" id="stat-active-deals">0</div>
+                            <div class="stat-trend" id="trend-active-deals">--</div>
+                        </div>
+                        <div class="card stat-mini-card">
+                            <div class="text-muted">Growth (Conversions)</div>
+                            <div class="stat-value" id="stat-conversions">0</div>
+                            <div class="stat-trend" id="trend-conversions">--</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- INTEGRATIONS VIEW -->
+            <section id="integrations" class="view-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Integrations</h1>
+                        <p>Configure your lead sources, data mapping, and communication providers.</p>
+                    </div>
+                </div>
+
+                <!-- Integrations Sub-Nav -->
+                <div class="sub-nav">
+                    <div class="sub-nav-item active" data-tab="sources">Lead Sources</div>
+                    <div class="sub-nav-item" data-tab="mapping">Field Mapping</div>
+                    <div class="sub-nav-item" data-tab="messaging">Messaging</div>
+                </div>
+
+                <!-- Tab 1: Lead Sources -->
+                <div id="tab-sources" class="tab-content active">
+                    <div class="automations-grid">
+                        <!-- Meta Integration Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #0668E1;"><i data-feather="facebook"></i></div>
+                                <span class="badge new">Active</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">Meta Lead Ads</div>
+                                <div class="automation-desc" style="margin-bottom: 0;">Automatically ingest leads from your Facebook & Instagram campaigns.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-secondary btn-sm btn-full" onclick="openMetaSetup()">Configure Plugin</button>
+                            </div>
+                        </div>
+
+                        <!-- Zapier / Webhook Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #ff4a00;"><i data-feather="zap"></i></div>
+                                <span class="badge">Webhook</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">Zapier / Make</div>
+                                <div class="automation-desc">Connect thousands of apps. Use this endpoint for automated lead ingestion.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-secondary btn-sm btn-full" onclick="copyWebhookUrl()">Copy Webhook URL</button>
+                            </div>
+                        </div>
+
+                        <!-- Google Sheets Sync Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #0F9D58;"><i data-feather="file-text"></i></div>
+                                <span class="badge" style="background: #e6f4ea; color: #137333;">Free Sync</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">Google Sheets Sync</div>
+                                <div class="automation-desc">Push leads from Meta or any form natively via Google Sheets.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-secondary btn-sm btn-full" onclick="openGSheetsSetup()">Setup Bridge</button>
+                            </div>
+                        </div>
+
+                        <!-- CSV Import Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #1a73e8;"><i data-feather="upload-cloud"></i></div>
+                                <span class="badge">Bulk</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">Manual CSV Import</div>
+                                <div class="automation-desc">Quickly import leads from a spreadsheet by pasting your data.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-secondary btn-sm btn-full" onclick="openImportModal()">Import Leads</button>
+                            </div>
+                        </div>
+
+                        <!-- Website Form Card -->
+                        <div class="card automation-card">
+                            <div class="automation-icon"><i data-feather="layout"></i></div>
+                            <span class="badge">Web</span>
+                            <div class="automation-title">Website Form</div>
+                            <div class="automation-desc">Embed a simple contact form on your site to capture leads directly.</div>
+                            <button class="btn btn-secondary btn-sm btn-full" onclick="showFormSnippet()">View Code Snippet</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 2: Field Mapping -->
+                <div id="tab-mapping" class="tab-content">
+                    <div class="section-header" style="margin-bottom: 24px;">
+                        <div class="section-title">
+                            <h2>Lead Field Mapping</h2>
+                            <p>Drag columns from your last sync into the CRM fields. All other columns are saved as Custom Data.</p>
+                        </div>
+                        <button class="btn btn-secondary btn-sm mapping-refresh-btn" onclick="refreshMappingSchema()">
+                            <i data-feather="refresh-cw" style="width: 14px; margin-right: 6px;"></i> Refresh Discovered Columns
+                        </button>
+                    </div>
+
+                    <div class="mapping-container">
+                        <!-- Top: Horizontal Preview Strip -->
+                        <div class="mapping-preview-strip">
+                            <div class="preview-strip-label">Preview</div>
+                            <div class="preview-strip-content">
+                                <div class="preview-plate">
+                                    <div id="preview-avatar" class="avatar">?</div>
+                                    <div class="preview-info">
+                                        <h4 id="preview-name-header">Mapping Preview</h4>
+                                        <p id="preview-phone-header">Phone Label</p>
+                                    </div>
+                                </div>
+                                <div class="preview-meta">
+                                    <div id="preview-email-header" style="font-size: 13px; font-weight: 500;">Email Label</div>
+                                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Contact Information</p>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div id="preview-source-badge" class="preview-source-badge">No Source</div>
+                                </div>
+                                <div class="preview-status"></div>
+                                <button class="btn btn-secondary btn-sm" style="padding: 6px 12px; font-size: 11px; opacity: 0.6;" disabled>View</button>
+                            </div>
+                        </div>
+
+                        <!-- Bottom: Dual Columns -->
+                        <div class="mapping-dual-columns">
+                            <!-- Source: Your Sheet Columns -->
+                            <div class="mapping-source-bank">
+                                <div class="mapping-bank-title">Discovered Columns</div>
+                                <div id="pillBank" class="pill-list">
+                                    <div class="slot-placeholder">Sync a lead...</div>
+                                </div>
+                            </div>
+
+                            <!-- Target: CRM Fields -->
+                            <div class="mapping-targets">
+                                <div class="mapping-slot">
+                                    <div class="slot-icon"><i data-feather="user"></i></div>
+                                    <div class="slot-label">
+                                        <h4>Full Name</h4>
+                                        <p>Mapping to: <span id="preview-name" style="color: var(--text-secondary); font-weight: 500;">-</span></p>
+                                    </div>
+                                    <div id="slot-name" class="slot-target" data-field="name">
+                                        <div class="slot-placeholder">Drop column</div>
+                                    </div>
+                                </div>
+
+                                <div class="mapping-slot">
+                                    <div class="slot-icon"><i data-feather="mail"></i></div>
+                                    <div class="slot-label">
+                                        <h4>Email Address</h4>
+                                        <p>Mapping to: <span id="preview-email" style="color: var(--text-secondary); font-weight: 500;">-</span></p>
+                                    </div>
+                                    <div id="slot-email" class="slot-target" data-field="email">
+                                        <div class="slot-placeholder">Drop column</div>
+                                    </div>
+                                </div>
+
+                                <div class="mapping-slot">
+                                    <div class="slot-icon"><i data-feather="phone"></i></div>
+                                    <div class="slot-label">
+                                        <h4>Phone Number</h4>
+                                        <p>Mapping to: <span id="preview-phone" style="color: var(--text-secondary); font-weight: 500;">-</span></p>
+                                    </div>
+                                    <div id="slot-phone" class="slot-target" data-field="phone">
+                                        <div class="slot-placeholder">Drop column</div>
+                                    </div>
+                                </div>
+
+                                <div style="display: flex; gap: 12px; margin-top: 12px;">
+                                    <button class="btn btn-primary btn-full" onclick="saveVisualMapping()">Save Mapping Preferences</button>
+                                    <button class="btn btn-secondary" onclick="confirmResetLeads()" style="color: #ef4444; border-color: #fee2e2;">
+                                        <i data-feather="trash-2" style="width: 14px;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tab 3: Messaging -->
+                <div id="tab-messaging" class="tab-content">
+                    <div class="section-header" style="margin-bottom: 24px;">
+                        <div class="section-title">
+                            <h2>Messaging Providers</h2>
+                            <p>Setup your communication API keys for WhatsApp and Email notifications.</p>
+                        </div>
+                    </div>
+
+                    <div class="automations-grid">
+                        <!-- Nodemailer Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #ea4335;"><i data-feather="mail"></i></div>
+                                <span id="badge-email-status" class="badge">Not Configured</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">Email (SMTP)</div>
+                                <div class="automation-desc">Connect Gmail, SendGrid, or any SMTP provider to send real emails.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-primary btn-sm btn-full" onclick="openGatewaySettings('email')">Setup SMTP</button>
+                            </div>
+                        </div>
+
+                        <!-- Twilio Card -->
+                        <div class="card automation-card">
+                            <div class="automation-card-header">
+                                <div class="automation-icon" style="color: #25D366;"><i data-feather="message-circle"></i></div>
+                                <span id="badge-whatsapp-status" class="badge">Not Configured</span>
+                            </div>
+                            <div class="automation-card-body">
+                                <div class="automation-title">WhatsApp (Twilio)</div>
+                                <div class="automation-desc">Send official WhatsApp messages. Integration verified and ready.</div>
+                            </div>
+                            <div class="automation-stats">
+                                <button class="btn btn-primary btn-sm btn-full" onclick="openGatewaySettings('whatsapp')">Configure Twilio</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ACTIVITY VIEW -->
+            <section id="activity" class="view-section">
+                <div class="section-header">
+                    <div class="section-title">
+                        <h1>Activity Feed</h1>
+                        <p>A real-time log of all automations, status changes, and incoming leads.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div id="activity-feed-container" class="timeline" style="padding: 32px 40px;">
+                        <!-- Logs will be rendered here -->
+                        <div class="empty-state">No activity recorded yet.</div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+
+    <!-- Overlay / Backdrop -->
+    <div id="overlay" class="overlay"></div>
+
+    <!-- Lead Detail Drawer -->
+    <div id="leadDrawer" class="drawer">
+        <div class="drawer-header">
+            <h2 id="drawerLeadName">Lead Details</h2>
+            <button class="btn-close" onclick="closeDrawer()"><i data-feather="x"></i></button>
+        </div>
+        <div class="drawer-content">
+            <div class="detail-section">
+                <label>Contact Information</label>
+                <div class="detail-info">
+                    <div class="info-item">
+                        <i data-feather="mail"></i> <span id="drawerEmail">email@example.com</span>
+                    </div>
+                    <div class="info-item">
+                        <i data-feather="phone"></i> <span id="drawerPhone">+1 (555) 000-0000</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <label>Lead Source</label>
+                <div id="drawerSource" class="source-label">
+                    <i data-feather="facebook"></i> Meta Lead Ad
+                </div>
+            </div>
+
+            <div class="detail-section" id="drawerCustomDataSection" style="display: none;">
+                <label>Custom Fields & Meta Data</label>
+                <div class="custom-fields-grid" id="drawerCustomDataFields" style="margin-top: 8px; display: grid; grid-template-columns: 1fr; gap: 8px;">
+                    <!-- Custom Fields rendered here -->
+                </div>
+            </div>
+
+            <div class="detail-section">
+                <label>Timeline & Notes</label>
+                <div id="leadTimeline" class="timeline">
+                    <!-- Dynamic Logs -->
+                </div>
+            </div>
+
+            <div class="detail-footer">
+                <button class="btn btn-primary btn-full">Send Message</button>
+                <button class="btn btn-secondary btn-full">Add Internal Note</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Lead Modal -->
+    <div id="addLeadModal" class="modal">
+        <div class="modal-header">
+            <h2>Add New Lead</h2>
+            <button class="btn-close" onclick="closeModal()"><i data-feather="x"></i></button>
+        </div>
+        <form class="modal-content">
+            <div class="form-group">
+                <label>Full Name</label>
+                <input type="text" placeholder="e.g. John Doe" required>
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Email Address</label>
+                    <input type="email" placeholder="john@example.com">
+                </div>
+                <div class="form-group">
+                    <label>Phone Number</label>
+                    <input type="tel" placeholder="+1 (555) 000-0000">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Source</label>
+                <select>
+                    <option>Manual Entry</option>
+                    <option>Meta Lead Ad</option>
+                    <option>Website Form</option>
+                    <option>Direct Call</option>
+                </select>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Create Lead</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Meta Setup Guide Modal -->
+    <div id="metaSetupModal" class="modal modal-lg">
+        <div class="modal-header">
+            <div>
+                <h2>Connect Meta Lead Ads</h2>
+                <p id="metaStepTitle">Step 1: Expose Your Server</p>
+            </div>
+            <button class="btn-close" onclick="closeMetaSetup()"><i data-feather="x"></i></button>
+        </div>
+        
+        <div class="modal-content">
+            <!-- Step 1 -->
+            <div class="meta-step" id="meta-step-1">
+                <div class="guide-illustration" style="background: #f8fafc; padding: 24px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                    <i data-feather="terminal" style="width: 48px; height: 48px; color: var(--text-primary);"></i>
+                </div>
+                <h3>Start your Public Tunnel</h3>
+                <p>Meta can't talk to a "localhost" address. You need a public URL using <strong>Ngrok</strong>.</p>
+                <div class="settings-panel" style="background: #1e293b; color: #f1f5f9; padding: 16px;">
+                    <code>ngrok http 3000</code>
+                </div>
+                <p style="margin-top: 16px;">Copy your "Forwarding" HTTPS URL (e.g., <code>https://a1b2.ngrok-free.app</code>) for the next step.</p>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="meta-step" id="meta-step-2" style="display: none;">
+                <h3>Connect your Meta Account</h3>
+                <p>Enter your <strong>Meta App ID</strong> to enable the automated connection.</p>
+                
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>Meta App ID</label>
+                    <input type="text" id="metaAppId" placeholder="e.g. 26644719948498857">
+                </div>
+
+                <div style="margin-top: 24px; text-align: center;">
+                    <button class="btn btn-primary btn-full" onclick="connectFacebook()" style="background: #1877F2; border-color: #1877F2;">
+                        <i data-feather="facebook" style="width: 16px; margin-right: 8px;"></i> Connect with Facebook
+                    </button>
+                </div>
+                
+                <p class="text-secondary small" style="margin-top: 16px;">
+                    This will automatically retrieve your Page Access Token and save it to the CRM.
+                </p>
+            </div>
+
+            <!-- Step 3 (New) -->
+            <div class="meta-step" id="meta-step-3" style="display: none;">
+                <h3>Select Facebook Page</h3>
+                <p>Choose the specific page you want to link to this CRM for lead monitoring.</p>
+                
+                <div id="meta-page-list" class="settings-panel" style="margin-top: 20px; max-height: 300px; overflow-y: auto;">
+                    <div class="text-secondary small" style="text-align: center; padding: 20px;">
+                        No pages discovered yet. Please connect your account in Step 2.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 4 (Was 3) -->
+            <div class="meta-step" id="meta-step-4" style="display: none;">
+                <h3>Configure Webhook Details</h3>
+                <p>In the Meta Webhooks dashboard, select "Page" from the dropdown and click <strong>Subscribe to this object</strong>.</p>
+                
+                <div class="form-group" style="margin-top: 20px;">
+                    <label>Callback URL</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="metaCallbackUrl" value="https://YOUR-NGROK-URL/api/webhooks/meta" readonly>
+                        <button class="btn btn-secondary btn-sm" onclick="copyText('metaCallbackUrl')">Copy</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Verify Token</label>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="text" id="metaVerifyToken" value="simple_funnel_token" readonly>
+                        <button class="btn btn-secondary btn-sm" onclick="copyText('metaVerifyToken')">Copy</button>
+                    </div>
+                </div>
+                <p class="text-secondary small">Important: Subscribe to the <strong>leadgen</strong> field.</p>
+            </div>
+
+            <!-- Step 5 (Was 4) -->
+            <div class="meta-step" id="meta-step-5" style="display: none;">
+                <div class="guide-illustration" style="background: #eef2ff; padding: 24px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                    <i data-feather="check-circle" style="width: 48px; height: 48px; color: #4f46e5;"></i>
+                </div>
+                <h3>You're All Set!</h3>
+                <p>Your CRM is now ready to receive real leads. Use the testing tool to send a mock lead instantly.</p>
+                <div style="margin-top: 24px;">
+                    <a href="https://developers.facebook.com/tools/lead-ads-testing" target="_blank" class="btn btn-primary btn-full">
+                        Open Meta Testing Tool <i data-feather="external-link" style="width: 14px; margin-left: 8px;"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content: space-between;">
+            <button class="btn btn-secondary" id="metaBackBtn" style="visibility: hidden;" onclick="changeMetaStep(-1)">Back</button>
+            <button class="btn btn-primary" id="metaNextBtn" onclick="changeMetaStep(1)" style="display: none;">Next Step</button>
+        </div>
+    </div>
+
+    <!-- Lead Import Modal -->
+    <div id="importModal" class="modal">
+        <div class="modal-header">
+            <div>
+                <h2>Import Leads</h2>
+                <p>Upload a CSV file or drag and drop to import leads.</p>
+            </div>
+            <button class="modal-close" onclick="closeImportModal()"><i data-feather="x"></i></button>
+        </div>
+        <div class="modal-content">
+            <!-- Upload State -->
+            <div id="import-upload-state">
+                <div class="import-dropzone" id="import-dropzone">
+                    <i data-feather="upload-cloud" class="dropzone-icon"></i>
+                    <h3>Drag & Drop CSV File</h3>
+                    <p>or click to browse from your computer</p>
+                    <input type="file" id="import-file-input" accept=".csv" style="display: none;">
+                </div>
+                <div class="import-help">
+                    <p class="text-secondary small">Required Format: <strong>Name, Email, Phone</strong> (Headers are optional)</p>
+                </div>
+            </div>
+
+            <!-- Preview State -->
+            <div id="import-preview-state" style="display: none;">
+                <div class="preview-header">
+                    <span id="import-row-count" class="badge">0 leads found</span>
+                    <button class="btn btn-secondary btn-sm" onclick="resetImport()">Change File</button>
+                </div>
+                <div class="import-preview-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                            </tr>
+                        </thead>
+                        <tbody id="import-preview-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        </div>
+        <div class="modal-footer" id="import-modal-footer" style="display: none;">
+            <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+            <button class="btn btn-primary" onclick="submitLeadImport()">Confirm & Import</button>
+        </div>
+    </div>
+
+    <!-- Google Sheets Setup Guide Modal (Free Zapier Alternative) -->
+    <div id="gSheetsSetupModal" class="modal modal-lg">
+        <div class="modal-header">
+            <div>
+                <h2>Setup Free Google Sheets Sync</h2>
+                <p id="gsStepTitle">Step 1: Connect Meta to Google Sheets</p>
+            </div>
+            <button class="btn-close" onclick="closeGSheetsSetup()"><i data-feather="x"></i></button>
+        </div>
+        
+        <div class="modal-content">
+            <!-- GS Step 1 -->
+            <div class="gs-step" id="gs-step-1">
+                <div class="guide-illustration" style="background: #e6f4ea; padding: 24px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                    <i data-feather="copy" style="width: 48px; height: 48px; color: #0F9D58;"></i>
+                </div>
+                <h3>Use Meta's Native Sync (100% Free)</h3>
+                <p>Facebook allows you to export Lead Ads directly to Google Sheets for free. This bypasses the need for complex API apps or paid Zapier accounts.</p>
+                <ol style="margin-top: 16px; padding-left: 20px; line-height: 1.6;">
+                    <li>Go to your <strong>Facebook Page > Lead Center</strong> or publishing tools.</li>
+                    <li>Find your Lead Ad form and click <strong>"Connect CRM"</strong>.</li>
+                    <li>Search for <strong>Google Sheets</strong> and follow the prompts to create a new sheet.</li>
+                </ol>
+                <p style="margin-top: 16px;" class="text-secondary small">Once your leads are syncing to that Google Sheet, move to the next step.</p>
+            </div>
+
+            <!-- GS Step 2 -->
+            <div class="gs-step" id="gs-step-2" style="display: none;">
+                <h3>Add the Bridge Script</h3>
+                <p>Now, let's connect that Google Sheet to your Simple CRM. Open the Google Sheet where leads are flowing.</p>
+                <ol style="margin-top: 16px; padding-left: 20px; line-height: 1.6;">
+                    <li>In the menu bar, click <strong>Extensions > Apps Script</strong>.</li>
+                    <li>Delete the default code and <strong>paste the script below</strong>.</li>
+                    <li>Hit the "Save" (disk) icon.</li>
+                </ol>
+                <div class="settings-panel" style="background: #1e293b; color: #f1f5f9; padding: 16px; margin-top: 16px; position: relative;">
+                    <button class="btn btn-secondary btn-sm" onclick="copyGsScript()" style="position: absolute; top: 8px; right: 8px; background: rgba(255,255,255,0.1); color: white; border: none;">Copy Code</button>
+                    <pre style="margin: 0; overflow-x: auto; font-size: 11px;"><code id="gsScriptCode">function onFormSubmit(e) {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var row = sheet.getLastRow();
+  var data = sheet.getRange(row, 1, 1, sheet.getLastColumn()).getValues()[0];
+  
+  // Adjust these indexes (0,1,2) based on which columns your Name, Email, and Phone are in.
+  var payload = {
+    "name": data[1], // Example: Column B is Name
+    "email": data[2], // Example: Column C is Email
+    "phone": data[3], // Example: Column D is Phone
+    "source": "Meta FB Ads (Free Sync)"
+  };
+
+  var options = {
+    "method": "post",
+    "contentType": "application/json",
+    "payload": JSON.stringify(payload)
+  };
+
+  // Replace this URL with your active Ngrok generic webhook
+  UrlFetchApp.fetch("YOUR_NGROK_URL/api/webhooks/generic", options);
+}</code></pre>
+                </div>
+            </div>
+
+            <!-- GS Step 3 -->
+            <div class="gs-step" id="gs-step-3" style="display: none;">
+                <div class="guide-illustration" style="background: #eef2ff; padding: 24px; border-radius: 12px; margin-bottom: 20px; text-align: center;">
+                    <i data-feather="zap" style="width: 48px; height: 48px; color: #4f46e5;"></i>
+                </div>
+                <h3>Set the Trigger & You're Done!</h3>
+                <p>Finally, we need to tell Google Sheets to run this script automatically when a new lead arrives.</p>
+                <ol style="margin-top: 16px; padding-left: 20px; line-height: 1.6;">
+                    <li>In the Apps Script editor, click on the <strong>Clock Icon</strong> (Triggers) on the left sidebar.</li>
+                    <li>Click <strong>+ Add Trigger</strong> in the bottom right.</li>
+                    <li>Settings: Choose <code>onFormSubmit</code>, Head, From Spreadsheet, <strong>On change</strong> or <strong>On form submit</strong>.</li>
+                    <li>Save it. (Google will ask you to authorize the script).</li>
+                </ol>
+                <p style="margin-top: 16px;">That's it! 100% free, instant lead syncing without any third-party fees.</p>
+            </div>
+        </div>
+
+        <div class="modal-footer" style="justify-content: space-between;">
+            <button class="btn btn-secondary" id="gsBackBtn" style="visibility: hidden;" onclick="changeGSStep(-1)">Back</button>
+            <button class="btn btn-primary" id="gsNextBtn" onclick="changeGSStep(1)">Next Step</button>
+        </div>
+    </div>
+
+    <!-- Initialize Scripts (With Cache Buster) -->
+    <script src="js/app.js?v=Gateways_v1"></script>
+    <!-- Gateway Configuration Modal -->
+    <div id="gatewayModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h3 id="gatewayModalTitle" style="margin: 0; font-size: 18px;">Configure Gateway</h3>
+                <button class="btn-close" onclick="closeModal()" style="background: none; border: none; cursor: pointer; color: var(--text-muted);"><i data-feather="x"></i></button>
+            </div>
+            
+            <!-- Email (SMTP) Form -->
+            <div id="emailGatewayForm" class="gateway-form" style="display: none;">
+                <div class="form-group">
+                    <label>Select Your Provider</label>
+                    <div class="provider-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                        <div class="provider-option active" onclick="selectEmailProvider('gmail')" id="prov-gmail" style="border: 1px solid var(--border-color); padding: 10px; border-radius: 12px; cursor: pointer; text-align: center;">
+                            <img src="https://www.google.com/s2/favicons?domain=gmail.com&sz=128" style="width: 28px; margin-bottom: 5px;"><br>Gmail
+                        </div>
+                        <div class="provider-option" onclick="selectEmailProvider('outlook')" id="prov-outlook" style="border: 1px solid var(--border-color); padding: 10px; border-radius: 12px; cursor: pointer; text-align: center;">
+                            <img src="https://www.google.com/s2/favicons?domain=outlook.com&sz=128" style="width: 28px; margin-bottom: 5px;"><br>Outlook
+                        </div>
+                    </div>
+                    <p style="font-size: 12px; text-align: center; margin-bottom: 20px;">
+                        <a href="#" onclick="toggleAdvancedEmail()" style="color: var(--primary-color); text-decoration: none;">Using something else? Configure manually</a>
+                    </p>
+                </div>
+
+                <div id="simple-email-fields">
+                    <div class="form-group">
+                        <label>Your Email Address</label>
+                        <input type="email" id="smtp_user" placeholder="alex@gmail.com">
+                    </div>
+                    <div class="form-group">
+                        <label>App-Specific Password</label>
+                        <input type="password" id="smtp_pass" placeholder="•••• •••• •••• ••••">
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Use an "App Password" from your Google/Microsoft account security settings.</p>
+                    </div>
+                </div>
+
+                <div id="advanced-email-fields" style="display: none; padding-top: 15px; border-top: 1px dashed var(--border-color); margin-top: 15px;">
+                    <div class="form-group">
+                        <label>SMTP Host</label>
+                        <input type="text" id="smtp_host" placeholder="e.g. smtp.gmail.com">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label>Port</label>
+                            <input type="number" id="smtp_port" placeholder="465">
+                        </div>
+                        <div class="form-group">
+                            <label>From Name</label>
+                            <input type="text" id="smtp_from" placeholder="My Business Name">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WhatsApp (Twilio) Form -->
+            <div id="whatsappGatewayForm" class="gateway-form" style="display: none;">
+                <div class="form-group">
+                    <label>Account SID <a href="https://console.twilio.com" target="_blank" style="font-size: 10px; color: var(--primary-color); margin-left: 5px; text-decoration: none;">(Find it here)</a></label>
+                    <input type="text" id="twilio_sid" placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxx">
+                </div>
+                <div class="form-group">
+                    <label>Auth Token <a href="https://console.twilio.com" target="_blank" style="font-size: 10px; color: var(--primary-color); margin-left: 5px; text-decoration: none;">(Find it here)</a></label>
+                    <input type="password" id="twilio_token" placeholder="Your Auth Token">
+                </div>
+                <div class="form-group">
+                    <label>WhatsApp Number</label>
+                    <input type="text" id="twilio_phone" placeholder="whatsapp:+14155238886">
+                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Include the <b>whatsapp:</b> prefix (e.g. whatsapp:+123456789).</p>
+                </div>
+            </div>
+
+            <div id="test-recipient-container" style="margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color);">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label>Test Recipient (Email or Phone)</label>
+                    <input type="text" id="test_recipient" placeholder="Recipient email or phone">
+                    <p style="font-size: 11px; color: var(--text-muted); margin-top: 4px;">Use this to verify the connection is working for others.</p>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
+                <button class="btn btn-primary btn-full" onclick="saveGatewaySettings()">Save Configuration</button>
+                <div style="display: flex; gap: 12px;">
+                    <button class="btn btn-secondary btn-full" onclick="testGatewayConnection()">
+                        <i data-feather="send" style="width: 14px; margin-right: 4px;"></i> Test Connection
+                    </button>
+                    <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>
