@@ -2749,9 +2749,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             listContainer.innerHTML = result.pages.map(page => `
-                <div class="card selection-card" style="margin-bottom: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                    <div style="flex: 1; text-align: left;">
-                        <div style="font-weight:600; color:var(--text-primary); font-size:14px;">${page.name}</div>
+                <div class="card selection-card" style="margin-bottom: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; min-height: 64px;">
+                    <div style="flex: 1; text-align: left; min-width: 0;">
+                        <div style="font-weight:600; color:var(--text-primary); font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${page.name}</div>
                         <div style="font-size:11px; color:var(--text-muted);">${page.category || 'Facebook Page'}</div>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="selectMetaQuickPage('${page.id}', '${page.access_token}', '${page.name.replace(/'/g, "\\'")}')">Select</button>
@@ -2793,9 +2793,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             listContainer.innerHTML = displayAccounts.map(acc => `
-                <div class="card selection-card" style="margin-bottom: 8px; padding: 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
-                    <div style="flex: 1; text-align: left;">
-                        <div style="font-weight:600; color:var(--text-primary); font-size:14px;">${acc.name}</div>
+                <div class="card selection-card" style="margin-bottom: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; min-height: 64px;">
+                    <div style="flex: 1; text-align: left; min-width: 0;">
+                        <div style="font-weight:600; color:var(--text-primary); font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${acc.name}</div>
                         <div style="font-size:11px; color:var(--text-muted);">ID: ${acc.id}</div>
                     </div>
                     <button class="btn btn-primary btn-sm" onclick="selectMetaQuickAdAccount('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')">Link</button>
