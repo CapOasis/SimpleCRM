@@ -755,6 +755,101 @@ app.get('/api/meta/status', async (req, res) => {
     }
 });
 
+// Sync existing leads from Facebook page forms
+app.post('/api/meta/sync-leads', async (req, res) => {
+    try {
+        const { data: settingsData } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_token']);
+        const config = {};
+        (settingsData || []).forEach(s => config[s.key] = s.value);
+
+        const pageId = config.meta_page_id;
+        const pageToken = config.meta_page_token;
+
+        if (!pageId || !pageToken) {
+            return res.status(400).json({ error: 'Meta integration is not connected.' });
+        }
+
+        const https = require('https');
+        const getUrl = (url) => new Promise((resolve, reject) => {
+            https.get(url, (response) => {
+                let raw = '';
+                response.on('data', chunk => raw += chunk);
+                response.on('end', () => resolve(JSON.parse(raw)));
+            }).on('error', reject);
+        });
+
+        // 1. Fetch all Lead Forms for the Page
+        const formsData = await getUrl(`https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name`);
+        if (formsData.error) throw new Error(formsData.error.message);
+
+        const forms = formsData.data || [];
+        let totalSynced = 0;
+
+        // 2. Fetch leads for each form
+        for (const form of forms) {
+            const leadsData = await getUrl(`https://graph.facebook.com/v19.0/${form.id}/leads?access_token=${pageToken}&fields=id,field_data,created_time`);
+            if (leadsData.error) continue;
+
+            const leads = leadsData.data || [];
+            for (const lead of leads) {
+                // Parse lead fields
+                const fields = { facebook_lead_id: lead.id };
+                if (lead.field_data) {
+                    lead.field_data.forEach(item => {
+                        if (item.values && item.values[0]) {
+                            fields[item.name] = item.values[0];
+                        }
+                    });
+                }
+
+                const name = fields.full_name || fields.first_name + ' ' + fields.last_name || 'Meta Lead';
+                const email = fields.email || null;
+                const phone = fields.phone_number || fields.phone || null;
+
+                // Check for duplicates in DB based on email (if exists) or custom_data matching the Facebook Lead ID
+                let isDuplicate = false;
+                if (email) {
+                    const { data: dupEmail } = await db.from('leads').select('id').eq('email', email).limit(1);
+                    if (dupEmail && dupEmail.length > 0) isDuplicate = true;
+                }
+
+                if (!isDuplicate) {
+                    // Search in JSONB custom_data field for the matching facebook_lead_id
+                    const { data: dupFbId } = await db.from('leads')
+                        .select('id')
+                        .contains('custom_data', { facebook_lead_id: lead.id })
+                        .limit(1);
+                    if (dupFbId && dupFbId.length > 0) isDuplicate = true;
+                }
+
+                if (isDuplicate) continue;
+
+                // Insert into DB
+                const { error: insertError, data: insertedRow } = await db.from('leads').insert([{
+                    name,
+                    email,
+                    phone,
+                    source: 'Meta Ads',
+                    created_at: lead.created_time || new Date().toISOString(),
+                    custom_data: fields
+                }]).select();
+
+                if (!insertError) {
+                    totalSynced++;
+                    if (insertedRow && insertedRow[0]) {
+                        triggerAutomations('new_lead', insertedRow[0]);
+                    }
+                }
+            }
+        }
+
+        res.json({ success: true, count: totalSynced });
+    } catch (err) {
+        console.error("Sync Error:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Disconnect Meta integration
 app.delete('/api/meta/disconnect', async (req, res) => {
     try {

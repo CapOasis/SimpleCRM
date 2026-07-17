@@ -2645,6 +2645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const desc = document.getElementById('metaConnectionDesc');
         const quickBtn = document.getElementById('metaQuickConnectBtn');
         const disconnectBtn = document.getElementById('metaDisconnectBtn');
+        const syncBtn = document.getElementById('metaSyncLeadsBtn');
 
         if (status && status.connected) {
             if (badge) {
@@ -2662,6 +2663,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (quickBtn) quickBtn.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
+            if (syncBtn) syncBtn.style.display = 'inline-flex';
         } else {
             if (badge) {
                 badge.textContent = 'Not Connected';
@@ -2672,8 +2674,39 @@ document.addEventListener('DOMContentLoaded', () => {
             if (desc) desc.textContent = 'Automatically ingest leads from your Facebook & Instagram campaigns.';
             if (quickBtn) quickBtn.style.display = 'inline-flex';
             if (disconnectBtn) disconnectBtn.style.display = 'none';
+            if (syncBtn) syncBtn.style.display = 'none';
         }
         refreshIcons();
+    };
+
+    window.syncMetaLeads = async () => {
+        const btn = document.getElementById('metaSyncLeadsBtn');
+        if (!btn) return;
+        
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i data-feather="loader" class="spin" style="width:13px;height:13px;"></i> Syncing...';
+        refreshIcons();
+
+        try {
+            const res = await fetchData('/api/meta/sync-leads', { method: 'POST' });
+            if (res && res.success) {
+                showToast(`Synced ${res.count} existing leads from Facebook forms successfully!`);
+                // If on Leads view, refresh leads
+                const activeSection = document.querySelector('.view-section.active');
+                if (activeSection && activeSection.id === 'leads') {
+                    loadLeads();
+                }
+            } else {
+                showToast("Failed to sync leads: " + (res ? res.error : "Unknown error"), "error");
+            }
+        } catch (e) {
+            showToast("Sync error: " + e.message, "error");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            refreshIcons();
+        }
     };
 
     window.openMetaQuickConnect = async () => {
