@@ -4,7 +4,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js",
+    "dev": "node --watch-path=server.js --watch-path=db.js --watch-path=automationEngine.js server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -12,11 +12,14 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
     "better-sqlite3": "^12.8.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.1",
     "express": "^5.2.1",
     "nodemailer": "^6.9.13",
-    "twilio": "^5.0.4"
+    "resend": "^6.17.2",
+    "twilio": "^5.0.4",
+    "ws": "^8.21.1"
   }
 }

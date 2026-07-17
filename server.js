@@ -1,8 +1,8 @@
-console.log('--- SimpleFunnel CRM: Starting Server ---');
+console.log('--- SimpleFunnel CRM: Starting Supabase Server ---');
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const db = require('./db');
+const db = require('./db'); // Supabase client instance
 const automationEngine = require('./automationEngine');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,39 +14,57 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- LEADS API ---
 
 // Get paginated leads
-app.get('/api/leads', (req, res) => {
+app.get('/api/leads', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
-    const offset = (page - 1) * limit;
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
 
     try {
-        const leads = db.prepare('SELECT * FROM leads ORDER BY created_at DESC LIMIT ? OFFSET ?').all(limit, offset);
-        res.json(leads);
+        const { data, error } = await db
+            .from('leads')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .range(from, to);
+
+        if (error) throw error;
+        res.json(data || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // Get total leads count for pagination
-app.get('/api/leads/count', (req, res) => {
+app.get('/api/leads/count', async (req, res) => {
     try {
-        const result = db.prepare('SELECT COUNT(*) as total FROM leads').get();
-        res.json({ total: result.total });
+        const { count, error } = await db
+            .from('leads')
+            .select('*', { count: 'exact', head: true });
+
+        if (error) throw error;
+        res.json({ total: count || 0 });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // GET unique keys from last 100 leads for schema discovery
-app.get('/api/leads/schema', (req, res) => {
+app.get('/api/leads/schema', async (req, res) => {
     try {
-        const leads = db.prepare('SELECT custom_data FROM leads WHERE custom_data IS NOT NULL ORDER BY id DESC LIMIT 100').all();
+        const { data, error } = await db
+            .from('leads')
+            .select('custom_data')
+            .order('id', { ascending: false })
+            .limit(100);
+
+        if (error) throw error;
+
         const keys = new Set();
-        leads.forEach(l => {
+        (data || []).forEach(l => {
             try {
                 if (l.custom_data) {
-                    const data = JSON.parse(l.custom_data);
-                    Object.keys(data).forEach(k => keys.add(k));
+                    const parsed = typeof l.custom_data === 'string' ? JSON.parse(l.custom_data) : l.custom_data;
+                    Object.keys(parsed).forEach(k => keys.add(k));
                 }
             } catch (e) {}
         });
@@ -57,19 +75,23 @@ app.get('/api/leads/schema', (req, res) => {
 });
 
 // GET the latest raw lead for preview mapping
-app.get('/api/leads/latest', (req, res) => {
+app.get('/api/leads/latest', async (req, res) => {
     try {
-        const lead = db.prepare(`
-            SELECT * FROM leads 
-            WHERE custom_data IS NOT NULL 
-            AND LOWER(name) NOT LIKE '%test%' 
-            AND LOWER(email) NOT LIKE '%meta.com%'
-            ORDER BY id DESC LIMIT 1
-        `).get();
-        if (lead && lead.custom_data) {
+        const { data, error } = await db
+            .from('leads')
+            .select('*')
+            .not('custom_data', 'is', null)
+            .order('id', { ascending: false })
+            .limit(1);
+
+        if (error) throw error;
+
+        const lead = data && data[0];
+        if (lead) {
+            const raw = typeof lead.custom_data === 'string' ? JSON.parse(lead.custom_data) : lead.custom_data;
             res.json({
                 ...lead,
-                raw: JSON.parse(lead.custom_data)
+                raw
             });
         } else {
             res.status(404).json({ error: 'No data available for preview. Please sync some leads first.' });
@@ -80,19 +102,21 @@ app.get('/api/leads/latest', (req, res) => {
 });
 
 // Add new lead
-app.post('/api/leads', (req, res) => {
+app.post('/api/leads', async (req, res) => {
     const { name, email, phone, source } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     try {
-        const stmt = db.prepare('INSERT INTO leads (name, email, phone, source) VALUES (?, ?, ?, ?)');
-        const result = stmt.run(name, email || null, phone || null, source || 'Manual');
-        
-        // Return the newly created lead
-        const newLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid);
-        
+        const { data, error } = await db
+            .from('leads')
+            .insert([{ name, email: email || null, phone: phone || null, source: source || 'Manual' }])
+            .select();
+
+        if (error) throw error;
+        const newLead = data && data[0];
+
         // Trigger Automations (Simulation)
-        triggerAutomations('new_lead', newLead);
+        if (newLead) triggerAutomations('new_lead', newLead);
         
         res.status(201).json(newLead);
     } catch (err) {
@@ -100,33 +124,62 @@ app.post('/api/leads', (req, res) => {
     }
 });
 
-// Update lead status (Kanban move)
-app.patch('/api/leads/:id', (req, res) => {
-    const { status } = req.body;
+// Update lead (full field update)
+app.patch('/api/leads/:id', async (req, res) => {
     const { id } = req.params;
+    const { status, name, email, phone, company, assigned_to, value, source } = req.body;
 
     try {
-        const stmt = db.prepare('UPDATE leads SET status = ? WHERE id = ?');
-        const result = stmt.run(status, id);
-        
-        if (result.changes === 0) return res.status(404).json({ error: 'Lead not found' });
-        
-        const updatedLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(id);
-        
-        // Trigger Automations (Simulation)
-        triggerAutomations('status_change', updatedLead);
-        
-        res.json(updatedLead);
+        // Fetch current lead details
+        const { data: leadData, error: fetchErr } = await db
+            .from('leads')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchErr || !leadData) return res.status(404).json({ error: 'Lead not found' });
+
+        const updatePayload = {
+            status: status !== undefined ? status : leadData.status,
+            name: name !== undefined ? name : leadData.name,
+            email: email !== undefined ? email : leadData.email,
+            phone: phone !== undefined ? phone : leadData.phone,
+            company: company !== undefined ? company : leadData.company,
+            assigned_to: assigned_to !== undefined ? assigned_to : leadData.assigned_to,
+            value: value !== undefined ? value : leadData.value,
+            source: source !== undefined ? source : leadData.source
+        };
+
+        const { data: updatedData, error: updateErr } = await db
+            .from('leads')
+            .update(updatePayload)
+            .eq('id', id)
+            .select()
+            .single();
+
+        if (updateErr) throw updateErr;
+
+        if (status !== undefined && status !== leadData.status) {
+            triggerAutomations('status_change', updatedData);
+            // Log update
+            await db.from('logs').insert([{ lead_id: id, message: `Stage changed from "${leadData.status}" to "${status}"`, type: 'status_change' }]);
+        }
+        res.json(updatedData);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // Delete all leads (for testing/reset)
-app.delete('/api/leads', (req, res) => {
+app.delete('/api/leads', async (req, res) => {
     try {
-        db.prepare('DELETE FROM logs').run(); // Clear logs first (child)
-        db.prepare('DELETE FROM leads').run(); // Clear leads second (parent)
+        // Supposing cascade deletion is configured in foreign keys
+        const { error: logsError } = await db.from('logs').delete().neq('id', 0);
+        if (logsError) throw logsError;
+
+        const { error: leadsError } = await db.from('leads').delete().neq('id', 0);
+        if (leadsError) throw leadsError;
+
         res.json({ success: true, message: 'All leads cleared' });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -135,25 +188,44 @@ app.delete('/api/leads', (req, res) => {
 
 // --- FLOWS (STAGES) API ---
 
-app.get('/api/stages', (req, res) => {
+app.get('/api/stages', async (req, res) => {
     try {
-        const stages = db.prepare('SELECT * FROM stages ORDER BY order_index ASC').all();
-        res.json(stages);
+        const { data, error } = await db
+            .from('stages')
+            .select('*')
+            .order('order_index', { ascending: true });
+
+        if (error) throw error;
+        res.json(data || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/stages', (req, res) => {
+app.post('/api/stages', async (req, res) => {
     const { name, color } = req.body;
     try {
-        // Insert before the last stage (closed)
-        const lastStage = db.prepare('SELECT order_index FROM stages ORDER BY order_index DESC LIMIT 1').get();
+        // Fetch last order_index
+        const { data, error: selectErr } = await db
+            .from('stages')
+            .select('order_index')
+            .order('order_index', { ascending: false })
+            .limit(1);
+
+        if (selectErr) throw selectErr;
+
+        const lastStage = data && data[0];
         const newOrder = lastStage ? lastStage.order_index : 0;
-        // Bump 'closed' up by 1
-        db.prepare('UPDATE stages SET order_index = order_index + 1 WHERE order_index >= ?').run(newOrder);
-        const stmt = db.prepare('INSERT INTO stages (name, color, order_index) VALUES (?, ?, ?)');
-        stmt.run(name, color || '#3b82f6', newOrder);
+
+        // Shift existing stages up
+        await db.rpc('increment_order_indexes', { target_index: newOrder });
+
+        const { error: insertErr } = await db
+            .from('stages')
+            .insert([{ name, color: color || '#3b82f6', order_index: newOrder }]);
+
+        if (insertErr) throw insertErr;
+
         res.status(201).json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -161,47 +233,61 @@ app.post('/api/stages', (req, res) => {
 });
 
 // Batch reorder stages
-app.put('/api/stages/reorder', (req, res) => {
+app.put('/api/stages/reorder', async (req, res) => {
     const { order } = req.body; // array of { id, order_index }
     try {
-        const stmt = db.prepare('UPDATE stages SET order_index = ? WHERE id = ?');
-        const tx = db.transaction((items) => {
-            items.forEach(item => stmt.run(item.order_index, item.id));
-        });
-        tx(order);
+        for (const item of order) {
+            await db.from('stages').update({ order_index: item.order_index }).eq('id', item.id);
+        }
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.put('/api/stages/:id', (req, res) => {
+app.put('/api/stages/:id', async (req, res) => {
     const { name, color, order_index } = req.body;
     try {
-        db.prepare('UPDATE stages SET name = ?, color = ?, order_index = ? WHERE id = ?')
-          .run(name, color, order_index, req.params.id);
+        const { error } = await db
+            .from('stages')
+            .update({ name, color, order_index })
+            .eq('id', req.params.id);
+
+        if (error) throw error;
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.delete('/api/stages/:id', (req, res) => {
+app.delete('/api/stages/:id', async (req, res) => {
     try {
-        const stage = db.prepare('SELECT name FROM stages WHERE id = ?').get(req.params.id);
-        if (!stage) return res.status(404).json({ error: 'Stage not found' });
-        
-        // Protect system stages
+        const { data: stage, error: fetchErr } = await db
+            .from('stages')
+            .select('name')
+            .eq('id', req.params.id)
+            .single();
+
+        if (fetchErr || !stage) return res.status(404).json({ error: 'Stage not found' });
+
         if (stage.name === 'new' || stage.name === 'closed') {
             return res.status(400).json({ error: 'Cannot delete system stages (New / Closed).' });
         }
-        
-        // Find first stage to reassign leads
-        const firstStage = db.prepare('SELECT name FROM stages WHERE id != ? ORDER BY order_index ASC LIMIT 1').get(req.params.id);
-        if (firstStage) {
-            db.prepare('UPDATE leads SET status = ? WHERE status = ?').run(firstStage.name, stage.name);
+
+        const { data: firstStage } = await db
+            .from('stages')
+            .select('name')
+            .neq('id', req.params.id)
+            .order('order_index', { ascending: true })
+            .limit(1);
+
+        if (firstStage && firstStage[0]) {
+            await db.from('leads').update({ status: firstStage[0].name }).eq('status', stage.name);
         }
-        db.prepare('DELETE FROM stages WHERE id = ?').run(req.params.id);
+
+        const { error: deleteErr } = await db.from('stages').delete().eq('id', req.params.id);
+        if (deleteErr) throw deleteErr;
+
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -210,64 +296,137 @@ app.delete('/api/stages/:id', (req, res) => {
 
 // --- AUTOMATIONS API ---
 
-app.get('/api/automations', (req, res) => {
+app.get('/api/automations', async (req, res) => {
     try {
-        const automations = db.prepare('SELECT * FROM automations').all();
-        res.json(automations.map(a => ({ ...a, settings: JSON.parse(a.settings) })));
+        const { data, error } = await db.from('automations').select('*');
+        if (error) throw error;
+        res.json((data || []).map(a => ({ 
+            ...a, 
+            settings: typeof a.settings === 'string' ? JSON.parse(a.settings) : a.settings 
+        })));
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/automations', (req, res) => {
+app.post('/api/automations', async (req, res) => {
     const { name, trigger, action, settings } = req.body;
     try {
-        const stmt = db.prepare('INSERT INTO automations (name, trigger, action, settings, active) VALUES (?, ?, ?, ?, 1)');
-        stmt.run(name, trigger, action, JSON.stringify(settings));
+        const { error } = await db
+            .from('automations')
+            .insert([{ name, trigger, action, settings, active: true }]);
+
+        if (error) throw error;
         res.status(201).json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.patch('/api/automations/:id', (req, res) => {
+app.patch('/api/automations/:id', async (req, res) => {
     const { id } = req.params;
     const { active } = req.body;
     try {
-        db.prepare('UPDATE automations SET active = ? WHERE id = ?').run(active ? 1 : 0, id);
+        const { error } = await db
+            .from('automations')
+            .update({ active: !!active })
+            .eq('id', id);
+
+        if (error) throw error;
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.delete('/api/automations/:id', (req, res) => {
+app.delete('/api/automations/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // First delete logs associated with this automation to avoid FK constraint issues
-        db.prepare('DELETE FROM logs WHERE automation_id = ?').run(id);
-        // Then delete the automation itself
-        db.prepare('DELETE FROM automations WHERE id = ?').run(id);
+        await db.from('logs').delete().eq('automation_id', id);
+        const { error } = await db.from('automations').delete().eq('id', id);
+        if (error) throw error;
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- WEBHOOKS (META SIMULATION) ---
+// --- WORKFLOWS API ---
 
-app.post('/api/webhooks/meta', (req, res) => {
-    const { name, email, phone } = req.body; // Mock payload from Meta
-    console.log('Incoming Meta Lead:', { name, email, phone });
-    
+// Get all workflows
+app.get('/api/workflows', async (req, res) => {
     try {
-        const stmt = db.prepare('INSERT INTO leads (name, email, phone, source) VALUES (?, ?, ?, ?)');
-        const result = stmt.run(name, email, phone, 'Meta Ads');
-        const newLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid);
-        
-        triggerAutomations('new_lead', newLead);
-        
-        res.json({ success: true, lead_id: result.lastInsertRowid });
+        const { data, error } = await db.from('workflows').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        res.json((data || []).map(w => ({
+            ...w,
+            steps: typeof w.steps === 'string' ? JSON.parse(w.steps) : (w.steps || [])
+        })));
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Create a workflow
+app.post('/api/workflows', async (req, res) => {
+    const { name, trigger, steps } = req.body;
+    try {
+        const { data, error } = await db
+            .from('workflows')
+            .insert([{ name, trigger: trigger || 'any', steps: steps || [], active: true }])
+            .select();
+        if (error) throw error;
+        res.status(201).json({ success: true, workflow: data[0] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Update a workflow (toggle active, update steps)
+app.patch('/api/workflows/:id', async (req, res) => {
+    const { id } = req.params;
+    const updates = {};
+    if (req.body.active !== undefined) updates.active = !!req.body.active;
+    if (req.body.steps !== undefined) updates.steps = req.body.steps;
+    if (req.body.name !== undefined) updates.name = req.body.name;
+    if (req.body.trigger !== undefined) updates.trigger = req.body.trigger;
+    try {
+        const { error } = await db.from('workflows').update(updates).eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Delete a workflow
+app.delete('/api/workflows/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        await db.from('workflow_logs').delete().eq('workflow_id', id);
+        const { error } = await db.from('workflows').delete().eq('id', id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get workflow logs
+app.get('/api/workflow-logs', async (req, res) => {
+    try {
+        const { data, error } = await db
+            .from('workflow_logs')
+            .select(`*, workflows!left(name), leads!left(name)`)
+            .order('timestamp', { ascending: false })
+            .limit(100);
+        if (error) throw error;
+        const formatted = (data || []).map(l => ({
+            ...l,
+            workflow_name: l.workflows ? l.workflows.name : null,
+            lead_name: l.leads ? l.leads.name : null
+        }));
+        res.json(formatted);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -276,27 +435,44 @@ app.post('/api/webhooks/meta', (req, res) => {
 // --- LOGS API ---
 
 // Get all logs (Global Activity)
-app.get('/api/logs', (req, res) => {
+app.get('/api/logs', async (req, res) => {
     try {
-        const logs = db.prepare(`
-            SELECT l.*, le.name as lead_name, a.name as automation_name 
-            FROM logs l 
-            LEFT JOIN leads le ON l.lead_id = le.id 
-            LEFT JOIN automations a ON l.automation_id = a.id 
-            ORDER BY l.timestamp DESC 
-            LIMIT 50
-        `).all();
-        res.json(logs);
+        const { data, error } = await db
+            .from('logs')
+            .select(`
+                *,
+                leads!left (name),
+                automations!left (name)
+            `)
+            .order('timestamp', { ascending: false })
+            .limit(50);
+
+        if (error) throw error;
+
+        // Format to match old SQLite LEFT JOIN naming
+        const formatted = (data || []).map(log => ({
+            ...log,
+            lead_name: log.leads ? log.leads.name : null,
+            automation_name: log.automations ? log.automations.name : null
+        }));
+
+        res.json(formatted);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
 // Get logs for a specific lead
-app.get('/api/leads/:id/logs', (req, res) => {
+app.get('/api/leads/:id/logs', async (req, res) => {
     try {
-        const logs = db.prepare('SELECT * FROM logs WHERE lead_id = ? ORDER BY timestamp DESC').all(req.params.id);
-        res.json(logs);
+        const { data, error } = await db
+            .from('logs')
+            .select('*')
+            .eq('lead_id', req.params.id)
+            .order('timestamp', { ascending: false });
+
+        if (error) throw error;
+        res.json(data || []);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -304,69 +480,107 @@ app.get('/api/leads/:id/logs', (req, res) => {
 
 // --- DASHBOARD ANALYTICS ---
 
-app.get('/api/stats/dashboard', (req, res) => {
+app.get('/api/stats/dashboard', async (req, res) => {
     const range = req.query.range || '7d';
-    
     let days = 7;
     if (range === '30d') days = 30;
     if (range === '90d') days = 90;
 
-    const currentPeriodStart = `date('now', '-${days} days')`;
-    const prevPeriodStart = `date('now', '-${days * 2} days')`;
-    const prevPeriodEnd = `date('now', '-${days} days')`;
+    const todayStr = new Date().toISOString().split('T')[0];
+    const rangeAgo = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const prevRangeAgo = new Date(Date.now() - days * 2 * 24 * 60 * 60 * 1000).toISOString();
 
     try {
-        const stages = db.prepare('SELECT name FROM stages ORDER BY order_index DESC').all();
-        const lastStage = stages[0]?.name || 'closed';
+        const { data: stages, error: stagesErr } = await db
+            .from('stages')
+            .select('name, color')
+            .order('order_index', { ascending: true });
+
+        if (stagesErr) throw stagesErr;
+
+        const lastStage = stages[stages.length - 1]?.name || 'closed';
 
         // 1. Current Stats
-        const summary = db.prepare(`
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as conversions
-            FROM leads 
-            WHERE created_at >= ${currentPeriodStart}
-        `).get(lastStage, lastStage);
+        const { data: currLeads, error: currErr } = await db
+            .from('leads')
+            .select('*')
+            .gte('created_at', rangeAgo);
 
-        // 2. Previous Stats (for Growth calculation)
-        const prevSummary = db.prepare(`
-            SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status != ? THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as conversions
-            FROM leads 
-            WHERE created_at >= ${prevPeriodStart} AND created_at < ${prevPeriodEnd}
-        `).get(lastStage, lastStage);
+        if (currErr) throw currErr;
 
-        // Calculate Growth %
+        // 2. Previous Period Stats
+        const { data: prevLeads, error: prevErr } = await db
+            .from('leads')
+            .select('*')
+            .gte('created_at', prevRangeAgo)
+            .lt('created_at', rangeAgo);
+
+        if (prevErr) throw prevErr;
+
         const calcGrowth = (curr, prev) => {
             if (!prev || prev === 0) return curr > 0 ? 100 : 0;
             return Math.round(((curr - prev) / prev) * 100);
         };
 
-        const stats = {
-            summary: {
-                total: { value: summary.total || 0, growth: calcGrowth(summary.total, prevSummary.total) },
-                active: { value: summary.active || 0, growth: calcGrowth(summary.active, prevSummary.active) },
-                conversions: { value: summary.conversions || 0, growth: calcGrowth(summary.conversions, prevSummary.conversions) }
-            },
-            sources: db.prepare(`
-                SELECT source as name, COUNT(*) as value 
-                FROM leads 
-                WHERE created_at >= ${currentPeriodStart}
-                GROUP BY source
-            `).all(),
-            weekly: db.prepare(`
-                SELECT strftime('%w', created_at) as day, COUNT(*) as count
-                FROM leads 
-                WHERE created_at >= ${currentPeriodStart}
-                GROUP BY day
-                ORDER BY day ASC
-            `).all()
-        };
+        const totalCurr = currLeads.length;
+        const activeCurr = currLeads.filter(l => l.status !== lastStage).length;
+        const convCurr = currLeads.filter(l => l.status === lastStage).length;
+        const valCurr = currLeads.reduce((acc, l) => acc + (parseFloat(l.value) || 0), 0);
 
-        res.json(stats);
+        const totalPrev = prevLeads.length;
+        const activePrev = prevLeads.filter(l => l.status !== lastStage).length;
+        const convPrev = prevLeads.filter(l => l.status === lastStage).length;
+
+        // 3. Pipeline Funnel
+        const funnelData = [];
+        for (const s of stages) {
+            const { count } = await db
+                .from('leads')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', s.name);
+            funnelData.push({ stage: s.name, color: s.color, count: count || 0 });
+        }
+
+        // 4. Daily trend
+        const { data: trendQuery } = await db
+            .from('leads')
+            .select('created_at')
+            .gte('created_at', rangeAgo);
+
+        const trendMap = {};
+        (trendQuery || []).forEach(l => {
+            const d = l.created_at.split('T')[0];
+            trendMap[d] = (trendMap[d] || 0) + 1;
+        });
+        const trendData = Object.keys(trendMap).map(k => ({ date: k, count: trendMap[k] })).sort((a,b) => a.date.localeCompare(b.date));
+
+        // 5. Tasks summary
+        const { count: overdueCount } = await db.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'open').lt('due_date', todayStr);
+        const { count: dueTodayCount } = await db.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'open').eq('due_date', todayStr);
+        const { count: openCount } = await db.from('tasks').select('*', { count: 'exact', head: true }).eq('status', 'open');
+
+        // 6. Source stats
+        const sourceMap = {};
+        currLeads.forEach(l => {
+            const src = l.source || 'Manual';
+            sourceMap[src] = (sourceMap[src] || 0) + 1;
+        });
+        const sourcesData = Object.keys(sourceMap).map(k => ({ name: k, value: sourceMap[k] }));
+
+        res.json({
+            summary: {
+                total: { value: totalCurr, growth: calcGrowth(totalCurr, totalPrev) },
+                active: { value: activeCurr, growth: calcGrowth(activeCurr, activePrev) },
+                conversions: { value: convCurr, growth: calcGrowth(convCurr, convPrev) },
+                pipeline_value: { value: valCurr }
+            },
+            funnel: funnelData,
+            trend: trendData,
+            tasks: { overdue: overdueCount || 0, due_today: dueTodayCount || 0, open: openCount || 0 },
+            sources: sourcesData,
+            weekly: [] // Simplified/legacy support
+        });
+
     } catch (err) {
         console.error('Stats Error:', err);
         res.status(500).json({ error: err.message });
@@ -375,27 +589,27 @@ app.get('/api/stats/dashboard', (req, res) => {
 
 // --- SETTINGS API ---
 
-app.get('/api/settings', (req, res) => {
+app.get('/api/settings', async (req, res) => {
     try {
-        const settings = db.prepare('SELECT * FROM settings').all();
+        const { data, error } = await db.from('settings').select('*');
+        if (error) throw error;
         const config = {};
-        settings.forEach(s => config[s.key] = s.value);
+        (data || []).forEach(s => config[s.key] = s.value);
         res.json(config);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/settings', (req, res) => {
-    const settings = req.body; // Expecting { key1: val1, key2: val2 }
+app.post('/api/settings', async (req, res) => {
+    const settings = req.body;
     try {
-        const stmt = db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)');
-        const transaction = db.transaction((data) => {
-            for (const [key, value] of Object.entries(data)) {
-                stmt.run(key, value);
-            }
-        });
-        transaction(settings);
+        for (const [key, value] of Object.entries(settings)) {
+            const { error } = await db
+                .from('settings')
+                .upsert({ key, value }, { onConflict: 'key' });
+            if (error) throw error;
+        }
         res.json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -403,191 +617,527 @@ app.post('/api/settings', (req, res) => {
 });
 
 // Trigger retroactive re-mapping for all leads
-app.post('/api/leads/remap', (req, res) => {
+app.post('/api/leads/remap', async (req, res) => {
     try {
-        // 1. Get current mappings
-        const settings = db.prepare('SELECT * FROM settings').all();
+        const { data: settingsData } = await db.from('settings').select('*');
         const config = {};
-        settings.forEach(s => config[s.key] = s.value);
+        (settingsData || []).forEach(s => config[s.key] = s.value);
 
         const mapName = config['mapping_name'] || 'name';
         const mapEmail = config['mapping_email'] || 'email';
         const mapPhone = config['mapping_phone'] || 'phone';
 
-        // 2. Fetch all leads with custom_data
-        const leads = db.prepare('SELECT id, custom_data FROM leads WHERE custom_data IS NOT NULL').all();
+        const { data: leads } = await db.from('leads').select('id, custom_data').not('custom_data', 'is', null);
 
-        // 3. Update each lead based on original raw data
-        const updateStmt = db.prepare('UPDATE leads SET name = ?, email = ?, phone = ? WHERE id = ?');
-        const transaction = db.transaction((leadsList) => {
-            for (const lead of leadsList) {
-                try {
-                    const data = JSON.parse(lead.custom_data);
-                    
-                    // Case-insensitive lookup helper
-                    const lookup = (key) => {
-                        if (!key) return null;
-                        const lowerKey = key.toLowerCase();
-                        const actualKey = Object.keys(data).find(k => k.toLowerCase() === lowerKey);
-                        return actualKey ? data[actualKey] : null;
-                    };
+        for (const lead of (leads || [])) {
+            try {
+                const data = typeof lead.custom_data === 'string' ? JSON.parse(lead.custom_data) : lead.custom_data;
+                const lookup = (key) => {
+                    if (!key) return null;
+                    const lowerKey = key.toLowerCase();
+                    const actualKey = Object.keys(data).find(k => k.toLowerCase() === lowerKey);
+                    return actualKey ? data[actualKey] : null;
+                };
 
-                    const newName = lookup(mapName) || 'Unknown';
-                    const newEmail = lookup(mapEmail);
-                    const newPhone = lookup(mapPhone);
+                const newName = lookup(mapName) || 'Unknown';
+                const newEmail = lookup(mapEmail);
+                const newPhone = lookup(mapPhone);
 
-                    updateStmt.run(newName, newEmail, newPhone, lead.id);
-                } catch (e) {}
+                await db.from('leads').update({ name: newName, email: newEmail, phone: newPhone }).eq('id', lead.id);
+            } catch (e) {}
+        }
+
+        res.json({ success: true, count: leads ? leads.length : 0 });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- META INTEGRATION API ---
+
+// Return public Meta App ID to frontend (safe to expose)
+app.get('/api/meta/app-config', (req, res) => {
+    const appId = process.env.META_APP_ID;
+    if (!appId || appId === 'your_meta_app_id_here') {
+        return res.status(404).json({ error: 'META_APP_ID not configured in .env' });
+    }
+    res.json({ appId });
+});
+
+// Exchange user token for pages list via Graph API
+app.post('/api/meta/pages', async (req, res) => {
+    const { userToken } = req.body;
+    if (!userToken) return res.status(400).json({ error: 'userToken required' });
+
+    try {
+        const https = require('https');
+        const url = `https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}&fields=id,name,category,access_token`;
+
+        const data = await new Promise((resolve, reject) => {
+            https.get(url, (response) => {
+                let raw = '';
+                response.on('data', chunk => raw += chunk);
+                response.on('end', () => resolve(JSON.parse(raw)));
+            }).on('error', reject);
+        });
+
+        if (data.error) return res.status(400).json({ error: data.error.message });
+        res.json({ success: true, pages: data.data || [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Fetch ad accounts for the connected user
+app.post('/api/meta/adaccounts', async (req, res) => {
+    const { userToken } = req.body;
+    if (!userToken) return res.status(400).json({ error: 'userToken required' });
+
+    try {
+        const https = require('https');
+        const url = `https://graph.facebook.com/v19.0/me/adaccounts?access_token=${userToken}&fields=id,name,account_status`;
+
+        const data = await new Promise((resolve, reject) => {
+            https.get(url, (response) => {
+                let raw = '';
+                response.on('data', chunk => raw += chunk);
+                response.on('end', () => resolve(JSON.parse(raw)));
+            }).on('error', reject);
+        });
+
+        if (data.error) return res.status(400).json({ error: data.error.message });
+        res.json({ success: true, adaccounts: data.data || [] });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Save selected page & ad account to settings
+app.post('/api/meta/save-page', async (req, res) => {
+    const { pageId, pageToken, pageName, adAccountId, adAccountName } = req.body;
+    if (!pageId || !pageToken) return res.status(400).json({ error: 'pageId and pageToken required' });
+
+    try {
+        const toSave = {
+            meta_page_id: pageId,
+            meta_page_name: pageName || '',
+            meta_page_token: pageToken,
+            ...(adAccountId ? { meta_ad_account_id: adAccountId } : {}),
+            ...(adAccountName ? { meta_ad_account_name: adAccountName } : {}),
+            meta_connected: 'true'
+        };
+
+        for (const [key, value] of Object.entries(toSave)) {
+            await db.from('settings').upsert({ key, value }, { onConflict: 'key' });
+        }
+
+        res.json({ success: true, message: `Connected page: ${pageName}` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get current Meta connection status
+app.get('/api/meta/status', async (req, res) => {
+    try {
+        const { data } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_name', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected']);
+        const config = {};
+        (data || []).forEach(s => config[s.key] = s.value);
+        res.json({
+            connected: config.meta_connected === 'true',
+            pageId: config.meta_page_id || null,
+            pageName: config.meta_page_name || null,
+            adAccountId: config.meta_ad_account_id || null,
+            adAccountName: config.meta_ad_account_name || null,
+        });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Disconnect Meta integration
+app.delete('/api/meta/disconnect', async (req, res) => {
+    try {
+        const keys = ['meta_page_id', 'meta_page_name', 'meta_page_token', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected'];
+        for (const key of keys) {
+            await db.from('settings').delete().eq('key', key);
+        }
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- CONTACTS API ---
+
+
+app.get('/api/contacts', async (req, res) => {
+    const { q } = req.query;
+    try {
+        let query = db.from('contacts').select('*');
+        if (q) {
+            query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,company.ilike.%${q}%`);
+        }
+        const { data, error } = await query.order('created_at', { ascending: false });
+        if (error) throw error;
+        res.json(data || []);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.post('/api/contacts', async (req, res) => {
+    const { name, email, phone, company, title, notes, tags, assigned_to, source } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    try {
+        const { data, error } = await db
+            .from('contacts')
+            .insert([{
+                name,
+                email: email || null,
+                phone: phone || null,
+                company: company || null,
+                title: title || null,
+                notes: notes || null,
+                tags: tags || [],
+                assigned_to: assigned_to || null,
+                source: source || 'Manual'
+            }])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/contacts/:id', async (req, res) => {
+    try {
+        const { data, error } = await db.from('contacts').select('*').eq('id', req.params.id).single();
+        if (error || !data) return res.status(404).json({ error: 'Contact not found' });
+        res.json(data);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/contacts/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, email, phone, company, title, notes, tags, assigned_to, source } = req.body;
+    try {
+        const { data: c, error: fetchErr } = await db.from('contacts').select('*').eq('id', id).single();
+        if (fetchErr || !c) return res.status(404).json({ error: 'Contact not found' });
+
+        const payload = {
+            name: name ?? c.name,
+            email: email ?? c.email,
+            phone: phone ?? c.phone,
+            company: company ?? c.company,
+            title: title ?? c.title,
+            notes: notes ?? c.notes,
+            tags: tags ?? c.tags,
+            assigned_to: assigned_to ?? c.assigned_to,
+            source: source ?? c.source
+        };
+
+        const { data, error: updateErr } = await db.from('contacts').update(payload).eq('id', id).select().single();
+        if (updateErr) throw updateErr;
+
+        res.json(data);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete contact
+app.delete('/api/contacts/:id', async (req, res) => {
+    try {
+        const { error } = await db.from('contacts').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- TASKS API ---
+
+app.get('/api/tasks', async (req, res) => {
+    const { lead_id, contact_id, status, assigned_to } = req.query;
+    try {
+        let query = db.from('tasks').select(`
+            *,
+            leads!left (name)
+        `);
+        if (lead_id) query = query.eq('lead_id', lead_id);
+        if (contact_id) query = query.eq('contact_id', contact_id);
+        if (status) query = query.eq('status', status);
+        if (assigned_to) query = query.eq('assigned_to', assigned_to);
+
+        const { data, error } = await query.order('due_date', { ascending: true });
+        if (error) throw error;
+
+        const formatted = (data || []).map(t => ({
+            ...t,
+            lead_name: t.leads ? t.leads.name : null
+        }));
+
+        res.json(formatted);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post('/api/tasks', async (req, res) => {
+    const { title, lead_id, contact_id, due_date, priority, assigned_to } = req.body;
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+    try {
+        const { data, error } = await db
+            .from('tasks')
+            .insert([{
+                title,
+                lead_id: lead_id || null,
+                contact_id: contact_id || null,
+                due_date: due_date || null,
+                priority: priority || 'medium',
+                assigned_to: assigned_to || null
+            }])
+            .select();
+
+        if (error) throw error;
+        res.status(201).json(data[0]);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.patch('/api/tasks/:id', async (req, res) => {
+    const { id } = req.params;
+    const { title, status, due_date, priority, assigned_to } = req.body;
+    try {
+        const { data: t, error: fetchErr } = await db.from('tasks').select('*').eq('id', id).single();
+        if (fetchErr || !t) return res.status(404).json({ error: 'Task not found' });
+
+        const payload = {
+            title: title ?? t.title,
+            status: status ?? t.status,
+            due_date: due_date ?? t.due_date,
+            priority: priority ?? t.priority,
+            assigned_to: assigned_to ?? t.assigned_to
+        };
+
+        const { data, error: updateErr } = await db.from('tasks').update(payload).eq('id', id).select().single();
+        if (updateErr) throw updateErr;
+
+        res.json(data);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete('/api/tasks/:id', async (req, res) => {
+    try {
+        const { error } = await db.from('tasks').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// --- TEAM & AUTHENTICATION API ---
+
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
+
+    try {
+        const { data: member, error } = await db
+            .from('team_members')
+            .select('*')
+            .eq('email', email.trim().toLowerCase())
+            .single();
+
+        if (error || !member || member.password !== password) {
+            return res.status(401).json({ error: 'Invalid email or password' });
+        }
+
+        // Generate dynamic token
+        const token = Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2);
+        const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // 7 days
+
+        const { error: sessionError } = await db
+            .from('team_sessions')
+            .insert([{ token, member_id: member.id, expires_at: expiresAt }]);
+
+        if (sessionError) throw sessionError;
+
+        res.json({
+            success: true,
+            token,
+            member: {
+                id: member.id,
+                name: member.name,
+                email: member.email,
+                role: member.role,
+                permissions: member.permissions || [],
+                settings: member.settings || { sound_enabled: true }
             }
         });
-        transaction(leads);
-
-        res.json({ success: true, count: leads.length });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- META AUTHENTICATION ---
+app.post('/api/auth/settings', async (req, res) => {
+    const { token, settings } = req.body;
+    if (!token || !settings) return res.status(400).json({ error: 'Missing token or settings payload' });
 
-// --- META AUTHENTICATION ---
-
-app.post('/api/meta/pages', async (req, res) => {
-    const { userToken, appId } = req.body;
-    
     try {
-        // 1. Get the list of pages managed by the user
-        const url = `https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}`;
-        console.log(`Fetching Page accounts for token...`);
-        const response = await fetch(url);
-        const data = await response.json();
+        // Get session
+        const { data: session, error: sessErr } = await db
+            .from('team_sessions')
+            .select('member_id')
+            .eq('token', token)
+            .single();
 
-        if (!response.ok) {
-            console.error('Meta API Error Details:', data);
-            throw new Error(data.error?.message || 'Failed to fetch Facebook accounts');
+        if (sessErr || !session) return res.status(401).json({ error: 'Session invalid or expired' });
+
+        const { data: updatedMember, error: updateErr } = await db
+            .from('team_members')
+            .update({ settings })
+            .eq('id', session.member_id)
+            .select('settings')
+            .single();
+
+        if (updateErr) {
+            if (updateErr.code === '42703') { // Column not found
+                return res.status(200).json({
+                    success: true,
+                    settings,
+                    warning: 'settings_column_missing'
+                });
+            }
+            throw updateErr;
         }
 
-        if (!data.data || data.data.length === 0) {
-            console.error('No Pages found.');
-            return res.status(400).json({ error: 'No Facebook Pages found. Make sure you select at least one Page in the login window.' });
-        }
-
-        // Return the list of pages to the frontend for selection
-        res.json({ 
-            success: true, 
-            pages: data.data.map(p => ({
-                id: p.id,
-                name: p.name,
-                access_token: p.access_token,
-                category: p.category
-            }))
-        });
+        res.json({ success: true, settings: updatedMember.settings });
     } catch (err) {
-        console.error('Meta Fetch Pages Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-app.post('/api/meta/save-page', (req, res) => {
-    const { appId, pageId, pageToken, pageName } = req.body;
-    
+app.post('/api/auth/change-password', async (req, res) => {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ error: 'Missing token or new password' });
+
     try {
-        if (!appId || !pageId || !pageToken || !pageName) {
-            return res.status(400).json({ error: 'Missing required page selection data.' });
-        }
+        // Get session
+        const { data: session, error: sessErr } = await db
+            .from('team_sessions')
+            .select('member_id')
+            .eq('token', token)
+            .single();
 
-        // Store the AppID, PageID and Page Token in the settings table
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('meta_app_id', appId);
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('meta_page_id', pageId);
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('meta_page_token', pageToken);
-        db.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)').run('meta_page_name', pageName);
+        if (sessErr || !session) return res.status(401).json({ error: 'Session invalid or expired' });
 
-        res.json({ 
-            success: true, 
-            message: `Connected to ${pageName} successfully!`
-        });
+        const { error: updateErr } = await db
+            .from('team_members')
+            .update({ password: newPassword })
+            .eq('id', session.member_id);
+
+        if (updateErr) throw updateErr;
+
+        res.json({ success: true, message: 'Password updated successfully' });
     } catch (err) {
-        console.error('Meta Save Page Error:', err);
         res.status(500).json({ error: err.message });
     }
 });
 
-// --- GATEWAY TESTING ---
-app.post('/api/test-gateways', async (req, res) => {
-    const { type, recipient } = req.body;
-    
+app.get('/api/team', async (req, res) => {
     try {
-        if (type === 'email') {
-            const config = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'smtp_%'").all();
-            const settings = {};
-            config.forEach(c => settings[c.key] = c.value);
+        const { data, error } = await db.from('team_members').select('*').order('created_at', { ascending: true });
+        if (error) throw error;
+        res.json(data || []);
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
-            if (!settings.smtp_user) throw new Error('SMTP not configured in database.');
-            
-            const targetTo = recipient || settings.smtp_user; // Fallback to config email if no recipient provided
-            
-            const success = await automationEngine.sendEmail(
-                targetTo, 
-                'Test Connection', 
-                'SimpleFunnel CRM Gateway Test: Your SMTP connection is working perfectly!', 
-                null, 
-                null
-            );
-            if (!success) throw new Error('SMTP Test failed. Check credentials/port.');
-            res.json({ success: true, message: 'Test email sent to ' + targetTo });
-        } 
-        else if (type === 'whatsapp') {
-            const config = db.prepare("SELECT key, value FROM settings WHERE key LIKE 'twilio_%'").all();
-            const settings = {};
-            config.forEach(c => settings[c.key] = c.value);
+app.post('/api/team', async (req, res) => {
+    const { name, email, role, permissions } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email are required' });
+    
+    // Generate temp password format: name@3-digit-random
+    const firstName = name.trim().split(' ')[0].replace(/[^a-zA-Z]/g, '');
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const tempPassword = `${firstName}@${randomNum}`;
+    const targetRole = role || 'employee';
+    const targetPermissions = permissions || ['dashboard', 'leads', 'contacts', 'tasks'];
 
-            if (!settings.twilio_phone) throw new Error('Twilio phone not configured.');
-            
-            // Allow phone with or without whatsapp: prefix for tests
-            const targetTo = recipient || settings.twilio_phone.replace('whatsapp:', '');
+    try {
+        const { data, error } = await db
+            .from('team_members')
+            .insert([{ 
+                name, 
+                email, 
+                role: targetRole, 
+                password: tempPassword,
+                permissions: targetPermissions
+            }])
+            .select();
 
-            const success = await automationEngine.sendWhatsApp(
-                targetTo, 
-                'SimpleFunnel CRM: Your WhatsApp Gateway is now live! 🔥', 
-                null, 
-                null
-            );
-            if (!success) throw new Error('WhatsApp Test failed. Check Twilio logs.');
-            res.json({ success: true, message: 'Test WhatsApp sent to ' + targetTo });
-        }
-    } catch (err) {
-        console.error('Test Gateway Error:', err.message);
-        res.status(400).json({ success: false, message: err.message });
+        if (error) throw error;
+        const newMember = data[0];
+
+        // Send Email Invite
+        const subject = 'Welcome to Simple CRM — Setup Your Account';
+        const mailBody = `Hello ${name},\n\nYour Simple CRM account has been created successfully.\n\nUsername: ${email}\nTemporary Password: ${tempPassword}\n\nPlease login at the CRM console and change your password immediately in the "My Account" section.\n\nBest Regards,\nCRM Team`;
+        
+        await automationEngine.sendEmail(email, subject, mailBody, null, null);
+
+        res.status(201).json(newMember);
+    } catch (err) { 
+        res.status(500).json({ error: err.message }); 
     }
 });
+
+app.post('/api/team/bulk-permissions', async (req, res) => {
+    const { ids, permissions } = req.body;
+    if (!ids || !Array.isArray(ids) || !permissions) {
+        return res.status(400).json({ error: 'Ids array and permissions list are required' });
+    }
+
+    try {
+        for (const id of ids) {
+            const { error } = await db
+                .from('team_members')
+                .update({ permissions })
+                .eq('id', id);
+            if (error) throw error;
+        }
+        res.json({ success: true, message: 'Permissions updated in bulk successfully' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.delete('/api/team/:id', async (req, res) => {
+    try {
+        const { error } = await db.from('team_members').delete().eq('id', req.params.id);
+        if (error) throw error;
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 
 // --- FIELD MAPPING HELPER ---
-function processMappedPayload(payload) {
+async function processMappedPayload(payload) {
     const rawData = { ...payload };
-    
-    // Create a lower-case lookup map of all incoming keys
     const lowerKeys = {};
     Object.keys(rawData).forEach(k => {
         lowerKeys[k.toLowerCase()] = k;
     });
 
-    // Fetch user mappings
-    const mappingSettings = db.prepare("SELECT key, value FROM settings WHERE key IN ('mapping_name', 'mapping_email', 'mapping_phone')").all();
+    const { data: mappingSettings } = await db.from('settings').select('key, value').in('key', ['mapping_name', 'mapping_email', 'mapping_phone']);
     const mapping = { name: 'name', email: 'email', phone: 'phone' };
-    
-    mappingSettings.forEach(s => {
+
+    (mappingSettings || []).forEach(s => {
         if (s.key === 'mapping_name' && s.value) mapping.name = s.value.toLowerCase();
         if (s.key === 'mapping_email' && s.value) mapping.email = s.value.toLowerCase();
         if (s.key === 'mapping_phone' && s.value) mapping.phone = s.value.toLowerCase();
     });
 
-    // Helper to find key in payload regardless of case
     const getVal = (mapKey) => {
         const actualKey = lowerKeys[mapKey];
         return actualKey ? rawData[actualKey] : null;
     };
 
-    // Try to find a source timestamp
     const sourceTime = getVal('created_time') || getVal('timestamp') || rawData.created_time || rawData.timestamp || null;
 
     const lead = {
@@ -595,8 +1145,8 @@ function processMappedPayload(payload) {
         email: getVal(mapping.email) || rawData.email || null,
         phone: getVal(mapping.phone) || rawData.phone || null,
         source: rawData.source || null,
-        created_at: sourceTime,
-        custom_data: JSON.stringify(rawData)
+        created_at: sourceTime || new Date().toISOString(),
+        custom_data: rawData
     };
     return lead;
 }
@@ -607,20 +1157,96 @@ app.get('/api/webhooks/generic', (req, res) => {
     res.send('Generic Webhook Endpoint is Live. Please use POST to send lead data.');
 });
 
-app.post('/api/webhooks/generic', (req, res) => {
+app.post('/api/webhooks/generic', async (req, res) => {
     console.log('Incoming Generic Webhook:', req.body);
     
-    const leadData = processMappedPayload(req.body);
-    leadData.source = leadData.source || 'Generic Webhook';
-
     try {
-        const stmt = db.prepare('INSERT INTO leads (name, email, phone, source, created_at, custom_data) VALUES (?, ?, ?, ?, ?, ?)');
-        const result = stmt.run(leadData.name, leadData.email, leadData.phone, leadData.source, leadData.created_at || new Date().toISOString(), leadData.custom_data);
-        const newLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid);
+        const leadData = await processMappedPayload(req.body);
+        leadData.source = leadData.source || 'Generic Webhook';
+
+        const { data, error } = await db
+            .from('leads')
+            .insert([{
+                name: leadData.name,
+                email: leadData.email,
+                phone: leadData.phone,
+                source: leadData.source,
+                created_at: leadData.created_at,
+                custom_data: leadData.custom_data
+            }])
+            .select();
+
+        if (error) throw error;
+        const newLead = data[0];
         
         triggerAutomations('new_lead', newLead);
-        
-        res.json({ success: true, lead_id: result.lastInsertRowid });
+        res.json({ success: true, lead_id: newLead.id });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- LEAD SEARCH ---
+
+app.get('/api/leads/search', async (req, res) => {
+    const { q, stage, source, assigned_to } = req.query;
+    try {
+        let query = db.from('leads').select('*');
+        if (q) {
+            query = query.or(`name.ilike.%${q}%,email.ilike.%${q}%,phone.ilike.%${q}%,company.ilike.%${q}%`);
+        }
+        if (stage) query = query.eq('status', stage);
+        if (source) query = query.eq('source', source);
+        if (assigned_to) query = query.eq('assigned_to', assigned_to);
+
+        const { data, error } = await query.order('created_at', { ascending: false }).limit(50);
+        if (error) throw error;
+        res.json(data || []);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- LEAD EXPORT (CSV) ---
+
+app.get('/api/leads/export', async (req, res) => {
+    try {
+        const { data: leads, error } = await db
+            .from('leads')
+            .select('id,name,email,phone,status,source,company,assigned_to,value,created_at')
+            .order('created_at', { ascending: false });
+
+        if (error) throw error;
+
+        const headers = ['ID','Name','Email','Phone','Stage','Source','Company','Assigned To','Value','Created At'];
+        const rows = (leads || []).map(l => [
+            l.id, `"${(l.name||'').replace(/"/g,'""')}"`,
+            `"${(l.email||'').replace(/"/g,'""')}"`,
+            `"${(l.phone||'').replace(/"/g,'""')}"`,
+            l.status, l.source,
+            `"${(l.company||'').replace(/"/g,'""')}"`,
+            `"${(l.assigned_to||'').replace(/"/g,'""')}"`,
+            l.value || 0, l.created_at
+        ].join(','));
+        const csv = [headers.join(','), ...rows].join('\n');
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="leads_export.csv"');
+        res.send(csv);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// --- LEAD NOTES ---
+
+app.post('/api/leads/:id/notes', async (req, res) => {
+    const { message } = req.body;
+    const { id } = req.params;
+    if (!message) return res.status(400).json({ error: 'Message is required' });
+    try {
+        const { error } = await db.from('logs').insert([{ lead_id: id, message, type: 'note' }]);
+        if (error) throw error;
+        res.status(201).json({ success: true });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -628,30 +1254,34 @@ app.post('/api/webhooks/generic', (req, res) => {
 
 // --- LEAD IMPORT (CSV) ---
 
-app.post('/api/leads/import', (req, res) => {
+app.post('/api/leads/import', async (req, res) => {
     const { leads } = req.body;
     if (!leads || !Array.isArray(leads)) return res.status(400).json({ error: 'No lead data provided' });
 
     let importedCount = 0;
-
     try {
-        const insertStmt = db.prepare('INSERT INTO leads (name, email, phone, source, custom_data) VALUES (?, ?, ?, ?, ?)');
-        const selectStmt = db.prepare('SELECT * FROM leads WHERE id = ?');
+        for (const rawLead of leads) {
+            const leadData = await processMappedPayload(rawLead);
+            leadData.source = leadData.source || rawLead.source || 'Bulk Import';
+            
+            const { data, error } = await db
+                .from('leads')
+                .insert([{
+                    name: leadData.name,
+                    email: leadData.email,
+                    phone: leadData.phone,
+                    source: leadData.source,
+                    created_at: leadData.created_at,
+                    custom_data: leadData.custom_data
+                }])
+                .select();
 
-        // Use a transaction for performance and data integrity
-        const transaction = db.transaction((leadList) => {
-            leadList.forEach(rawLead => {
-                const leadData = processMappedPayload(rawLead);
-                leadData.source = leadData.source || rawLead.source || 'Bulk Import';
-                
-                const result = insertStmt.run(leadData.name, leadData.email, leadData.phone, leadData.source, leadData.custom_data);
-                const newLead = selectStmt.get(result.lastInsertRowid);
-                triggerAutomations('new_lead', newLead);
+            if (error) throw error;
+            if (data && data[0]) {
+                triggerAutomations('new_lead', data[0]);
                 importedCount++;
-            });
-        });
-
-        transaction(leads);
+            }
+        }
         res.json({ success: true, count: importedCount });
     } catch (err) {
         console.error('Import Error:', err);
@@ -661,30 +1291,129 @@ app.post('/api/leads/import', (req, res) => {
 
 // --- AUTOMATION ENGINE ---
 
-function triggerAutomations(triggerType, lead) {
-    // Force active to be treated as integer 1
-    const autos = db.prepare('SELECT * FROM automations WHERE trigger = ? AND CAST(active AS INTEGER) = 1').all(triggerType);
-    
-    autos.forEach(async (auto) => {
-        const settings = JSON.parse(auto.settings);
-        const logMsg = `[Automation: ${auto.name}] Initialized for ${lead.name}.`;
-        console.log(logMsg);
-        
-        // Log initialization to DB
-        db.prepare('INSERT INTO logs (lead_id, automation_id, message) VALUES (?, ?, ?)').run(lead.id, auto.id, logMsg);
+async function triggerAutomations(triggerType, lead) {
+    try {
+        const { data: autos } = await db
+            .from('automations')
+            .select('*')
+            .eq('trigger', triggerType)
+            .eq('active', true);
 
-        // Execute Real Communication
-        if (auto.action === 'send_email') {
-            await automationEngine.sendEmail(lead.email, settings.subject, settings.body, lead.id, auto.id);
-        } else if (auto.action === 'send_whatsapp') {
-            await automationEngine.sendWhatsApp(lead.phone, settings.body || "Hello!", lead.id, auto.id);
+        for (const auto of (autos || [])) {
+            const settings = typeof auto.settings === 'string' ? JSON.parse(auto.settings) : auto.settings;
+            const logMsg = `[Automation: ${auto.name}] Initialized for ${lead.name}.`;
+            console.log(logMsg);
+            
+            await db.from('logs').insert([{ lead_id: lead.id, automation_id: auto.id, message: logMsg }]);
+
+            if (auto.action === 'send_email') {
+                await automationEngine.sendEmail(lead.email, settings.subject, settings.body, lead.id, auto.id);
+            } else if (auto.action === 'send_whatsapp') {
+                await automationEngine.sendWhatsApp(lead.phone, settings.body || "Hello!", lead.id, auto.id);
+            }
         }
-    });
+    } catch (err) {
+        console.error('Automation trigger error:', err);
+    }
+
+    // Also run matching Workflows
+    await triggerWorkflows(lead);
+}
+
+let workflowRoundRobinCounters = {};
+
+async function triggerWorkflows(lead) {
+    try {
+        const { data: workflows } = await db
+            .from('workflows')
+            .select('*')
+            .eq('active', true);
+
+        const matching = (workflows || []).filter(w => {
+            const src = (w.trigger || 'any').toLowerCase();
+            return src === 'any' || src === (lead.source || '').toLowerCase();
+        });
+
+        for (const wf of matching) {
+            const steps = typeof wf.steps === 'string' ? JSON.parse(wf.steps) : (wf.steps || []);
+            console.log(`[Workflow: ${wf.name}] Starting for lead ${lead.name}`);
+
+            for (let i = 0; i < steps.length; i++) {
+                const step = steps[i];
+                const cfg = step.config || {};
+                let logMsg = '';
+
+                try {
+                    if (step.type === 'assign_staff') {
+                        const staffList = cfg.staff || [];
+                        if (staffList.length === 0) continue;
+
+                        let assignedName = null;
+                        if (!workflowRoundRobinCounters[wf.id]) {
+                            workflowRoundRobinCounters[wf.id] = 0;
+                        }
+                        const currentIdx = workflowRoundRobinCounters[wf.id];
+
+                        if (cfg.mode === 'weighted') {
+                            // Build weighted pool
+                            const pool = [];
+                            staffList.forEach(s => {
+                                const w = parseInt(s.weight) || 1;
+                                for (let j = 0; j < w; j++) pool.push(s.name);
+                            });
+                            assignedName = pool[currentIdx % pool.length];
+                            workflowRoundRobinCounters[wf.id] = (currentIdx + 1) % pool.length;
+                        } else {
+                            // Even round-robin
+                            assignedName = staffList[currentIdx % staffList.length].name;
+                            workflowRoundRobinCounters[wf.id] = (currentIdx + 1) % staffList.length;
+                        }
+
+                        if (assignedName) {
+                            await db.from('leads').update({ assigned_to: assignedName }).eq('id', lead.id);
+                            lead.assigned_to = assignedName;
+                            logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: Assigned lead to ${assignedName}`;
+                        }
+
+                    } else if (step.type === 'send_email') {
+                        const subject = (cfg.subject || 'Hello {{name}}').replace('{{name}}', lead.name).replace('{{email}}', lead.email || '').replace('{{source}}', lead.source || '');
+                        const body = (cfg.body || '').replace('{{name}}', lead.name).replace('{{email}}', lead.email || '').replace('{{source}}', lead.source || '');
+                        if (lead.email) {
+                            await automationEngine.sendEmail(lead.email, subject, body, lead.id, null);
+                        }
+                        logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: Email sent to ${lead.email || 'no email'} — Subject: ${subject}`;
+
+                    } else if (step.type === 'send_whatsapp') {
+                        const msg = (cfg.body || 'Hello {{name}}!').replace('{{name}}', lead.name).replace('{{email}}', lead.email || '').replace('{{source}}', lead.source || '');
+                        if (lead.phone) {
+                            await automationEngine.sendWhatsApp(lead.phone, msg, lead.id, null);
+                        }
+                        logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: WhatsApp queued to ${lead.phone || 'no phone'} — "${msg.substring(0, 60)}..."`;
+
+                    } else if (step.type === 'notify_team') {
+                        const title = (cfg.title || 'New Lead Alert').replace('{{name}}', lead.name).replace('{{source}}', lead.source || '');
+                        const body = (cfg.body || 'A new lead has come in.').replace('{{name}}', lead.name).replace('{{source}}', lead.source || '').replace('{{assigned}}', lead.assigned_to || 'Unassigned');
+                        logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: Team Notification — ${title}: ${body}`;
+                    }
+
+                    if (logMsg) {
+                        await db.from('workflow_logs').insert([{ workflow_id: wf.id, lead_id: lead.id, step_index: i, message: logMsg }]);
+                        await db.from('logs').insert([{ lead_id: lead.id, automation_id: null, message: logMsg, type: 'workflow' }]);
+                        console.log(logMsg);
+                    }
+                } catch (stepErr) {
+                    console.error(`[Workflow: ${wf.name}] Step ${i + 1} error:`, stepErr.message);
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Workflow trigger error:', err);
+    }
 }
 
 // --- META WEBHOOK ---
 
-// Verification Handler (Handshake)
+// Verification Handler
 app.get('/api/webhooks/meta', (req, res) => {
     const mode = req.query['hub.mode'];
     const token = req.query['hub.verify_token'];
@@ -700,10 +1429,8 @@ app.get('/api/webhooks/meta', (req, res) => {
     }
 });
 
-// Data Handler (Lead Ingestion)
+// Data Handler
 app.post('/api/webhooks/meta', async (req, res) => {
-    console.log('Incoming Meta Webhook Payload:', JSON.stringify(req.body, null, 2));
-
     try {
         const entry = req.body.entry;
         if (!entry || entry.length === 0) return res.sendStatus(200);
@@ -712,89 +1439,113 @@ app.post('/api/webhooks/meta', async (req, res) => {
         if (!change || change.field !== 'leadgen') return res.sendStatus(200);
 
         const leadgenId = change.value.leadgen_id;
-        console.log(`New Meta Lead Detected: ${leadgenId}`);
-
-        // Fetch actual lead details from Meta Graph API
         const leadData = await fetchMetaLeadDetails(leadgenId);
         
         if (leadData) {
-            // Bulletproof Filter: Ignore Meta Test Leads & Dummy Data
             const lowerName = (leadData.name || '').toLowerCase();
             const lowerEmail = (leadData.email || '').toLowerCase();
             if (lowerName.includes('test lead') || lowerName.includes('dummy data') || lowerEmail.includes('test@meta.com')) {
-                console.log(`Skipping Meta Test Lead: ${leadData.name}`);
                 return res.json({ success: true, message: 'Test lead ignored' });
             }
 
-            const stmt = db.prepare('INSERT INTO leads (name, email, phone, source, created_at, custom_data) VALUES (?, ?, ?, ?, ?, ?)');
             const createdAt = leadData.created_time || new Date().toISOString();
-            const result = stmt.run(leadData.name, leadData.email || null, leadData.phone || null, 'Meta Ads', createdAt, JSON.stringify(leadData));
-            const newLead = db.prepare('SELECT * FROM leads WHERE id = ?').get(result.lastInsertRowid);
-            
-            triggerAutomations('new_lead', newLead);
-            console.log(`Successfully ingested Meta Lead: ${leadData.name}`);
-        }
+            const { data, error } = await db
+                .from('leads')
+                .insert([{
+                    name: leadData.name,
+                    email: leadData.email || null,
+                    phone: leadData.phone || null,
+                    source: 'Meta Ads',
+                    created_at: createdAt,
+                    custom_data: leadData
+                }])
+                .select();
 
+            if (error) throw error;
+            if (data && data[0]) triggerAutomations('new_lead', data[0]);
+        }
         res.json({ success: true });
     } catch (err) {
         console.error('Meta Ingestion Error:', err);
-        res.status(500).json({ error: err.message });
+        res.sendStatus(500);
     }
 });
 
-/**
- * Helper to fetch lead details from Meta Graph API
- */
 async function fetchMetaLeadDetails(leadId) {
-    // Check Database for token first
-    let accessToken = db.prepare('SELECT value FROM settings WHERE key = ?').get('meta_page_token')?.value;
-
-    // Fallback to .env
-    if (!accessToken) {
-        accessToken = process.env.META_PAGE_ACCESS_TOKEN;
-    }
+    let accessToken;
+    const { data: setting } = await db.from('settings').select('value').eq('key', 'meta_page_token').single();
+    if (setting) accessToken = setting.value;
+    if (!accessToken) accessToken = process.env.META_PAGE_ACCESS_TOKEN;
 
     if (!accessToken || accessToken === 'your_page_access_token_here') {
-        console.warn('Meta Access Token not configured (DB or .env). Mocking lead data.');
         return { name: `Meta Lead ${leadId}`, email: 'mock@meta.com', phone: '+123456789' };
     }
 
-    const url = `https://graph.facebook.com/v19.0/${leadId}?fields=id,name,email,phone,created_time,form_id,ad_id&access_token=${accessToken}`;
-    
+    const url = `https://graph.facebook.com/v19.0/${leadId}?fields=id,name,email,phone,created_time&access_token=${accessToken}`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Meta API error: ${response.statusText}`);
         const data = await response.json();
         
-        // Meta returns fields in an array called 'field_data'
         const fields = {};
         if (data.field_data) {
             data.field_data.forEach(item => {
                 fields[item.name] = item.values[0];
             });
         }
-
         return {
             name: fields.full_name || fields.first_name + ' ' + fields.last_name || 'Meta Lead',
             email: fields.email,
             phone: fields.phone_number
         };
     } catch (err) {
-        console.error('Graph API Fetch Failed:', err);
         return null;
     }
 }
 
-app.listen(PORT, () => {
-    console.log(`Server running at http://localhost:${PORT}`);
-    
-    // --- SELF-HEALING: Clean up any board-prefixed statuses ---
+// --- GATEWAY TESTING ---
+app.post('/api/test-gateways', async (req, res) => {
+    const { type, recipient } = req.body;
     try {
-        const result = db.prepare("UPDATE leads SET status = REPLACE(status, 'board-', '') WHERE status LIKE 'board-%'").run();
-        if (result.changes > 0) {
-            console.log(`Self-healing: Cleaned up ${result.changes} corrupted lead statuses.`);
-        }
+        if (type === 'email') {
+            const { data: config } = await db.from('settings').select('key, value').like('key', 'smtp_%');
+            const settings = {};
+            (config || []).forEach(c => settings[c.key] = c.value);
+
+            if (!settings.smtp_user) throw new Error('SMTP not configured.');
+            const targetTo = recipient || settings.smtp_user;
+            
+            const success = await automationEngine.sendEmail(
+                targetTo, 
+                'Test Connection', 
+                'SimpleFunnel CRM Gateway Test: SMTP active.', 
+                null, 
+                null
+            );
+            if (!success) throw new Error('SMTP connection test failed.');
+            res.json({ success: true, message: 'Test email sent.' });
+        } 
     } catch (err) {
-        console.error('Self-healing failed:', err);
+        res.status(400).json({ success: false, message: err.message });
     }
+});
+
+app.get(/^(?!\/api).*/, (req, res) => {
+    // Exclude API paths and static asset queries (containing dots)
+    if (req.path.startsWith('/api') || req.path.includes('.')) {
+        return res.status(404).send('Not Found');
+    }
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, async () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+    // Safe self-healing status check
+    try {
+        const { data: corrupted } = await db.from('leads').select('id, status').like('status', 'board-%');
+        for (const lead of (corrupted || [])) {
+            const clean = lead.status.replace('board-', '');
+            await db.from('leads').update({ status: clean }).eq('id', lead.id);
+        }
+    } catch (e) {}
 });
