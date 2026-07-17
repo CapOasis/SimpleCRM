@@ -1530,6 +1530,11 @@ app.post('/api/test-gateways', async (req, res) => {
     }
 });
 
+// Serve the Privacy Policy Page
+app.get(['/privacy', '/privacy.html'], (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'privacy.html'));
+});
+
 app.get(/^(?!\/api).*/, (req, res) => {
     // Exclude API paths and static asset queries (containing dots)
     if (req.path.startsWith('/api') || req.path.includes('.')) {
