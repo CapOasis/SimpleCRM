@@ -2657,9 +2657,31 @@ document.addEventListener('DOMContentLoaded', () => {
             if (desc) {
                 let info = `Connected to page: <strong>${status.pageName}</strong> (ID: ${status.pageId})`;
                 if (status.adAccountName) {
-                    info += `<br>Linked Ad Account: <strong>${status.adAccountName}</strong>`;
+                    info += `<br>Linked Ad Account: <strong>${status.adAccountName}</strong> (ID: ${status.adAccountId})`;
                 }
-                desc.innerHTML = info;
+                
+                // Fetch and render campaigns list
+                desc.innerHTML = info + `<div style="margin-top: 12px; font-size:12px; color: var(--text-muted);">Fetching linked campaigns...</div>`;
+                
+                const campaigns = await fetchData('/api/meta/campaigns');
+                if (campaigns && campaigns.length > 0) {
+                    const listHtml = campaigns.map(c => `
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 0; border-bottom: 1px dashed var(--border-color); font-size: 12px;">
+                            <span style="font-weight: 500; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 70%;">${c.name}</span>
+                            <span class="badge" style="padding: 2px 6px; font-size: 10px; background: ${c.status === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)'}; color: ${c.status === 'ACTIVE' ? '#10b981' : '#64748b'};">${c.status}</span>
+                        </div>
+                    `).join('');
+                    desc.innerHTML = info + `
+                        <div style="margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px; text-align: left;">
+                            <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Campaigns (${campaigns.length})</span>
+                            <div style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
+                                ${listHtml}
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    desc.innerHTML = info + `<div style="margin-top: 12px; font-size:12px; color: var(--text-muted);">No active campaigns found on this Ad Account.</div>`;
+                }
             }
             if (quickBtn) quickBtn.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
@@ -2845,7 +2867,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             ...quickMetaPageData,
             adAccountId,
-            adAccountName
+            adAccountName,
+            userToken: quickMetaUserToken
         };
 
         const result = await fetchData('/api/meta/save-page', {
@@ -2863,9 +2886,14 @@ document.addEventListener('DOMContentLoaded', () => {
     window.skipMetaQuickAds = async () => {
         if (!quickMetaPageData) return;
 
+        const payload = {
+            ...quickMetaPageData,
+            userToken: quickMetaUserToken
+        };
+
         const result = await fetchData('/api/meta/save-page', {
             method: 'POST',
-            body: JSON.stringify(quickMetaPageData)
+            body: JSON.stringify(payload)
         });
 
         if (result && result.success) {

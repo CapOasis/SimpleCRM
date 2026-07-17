@@ -714,7 +714,7 @@ app.post('/api/meta/adaccounts', async (req, res) => {
 
 // Save selected page & ad account to settings
 app.post('/api/meta/save-page', async (req, res) => {
-    const { pageId, pageToken, pageName, adAccountId, adAccountName } = req.body;
+    const { pageId, pageToken, pageName, adAccountId, adAccountName, userToken } = req.body;
     if (!pageId || !pageToken) return res.status(400).json({ error: 'pageId and pageToken required' });
 
     try {
@@ -724,6 +724,7 @@ app.post('/api/meta/save-page', async (req, res) => {
             meta_page_token: pageToken,
             ...(adAccountId ? { meta_ad_account_id: adAccountId } : {}),
             ...(adAccountName ? { meta_ad_account_name: adAccountName } : {}),
+            ...(userToken ? { meta_user_token: userToken } : {}),
             meta_connected: 'true'
         };
 
@@ -740,7 +741,9 @@ app.post('/api/meta/save-page', async (req, res) => {
 // Get current Meta connection status
 app.get('/api/meta/status', async (req, res) => {
     try {
-        const { data } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_name', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected']);
+        const { data } = await db.from('settings').select('*').in('key', [
+            'meta_page_id', 'meta_page_name', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected', 'meta_user_token'
+        ]);
         const config = {};
         (data || []).forEach(s => config[s.key] = s.value);
         res.json({
@@ -749,9 +752,47 @@ app.get('/api/meta/status', async (req, res) => {
             pageName: config.meta_page_name || null,
             adAccountId: config.meta_ad_account_id || null,
             adAccountName: config.meta_ad_account_name || null,
+            hasUserToken: !!config.meta_user_token
         });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+// Get all active/paused campaigns for the linked Ad Account
+app.get('/api/meta/campaigns', async (req, res) => {
+    try {
+        const { data: settingsData } = await db.from('settings').select('*').in('key', ['meta_ad_account_id', 'meta_user_token']);
+        const config = {};
+        (settingsData || []).forEach(s => config[s.key] = s.value);
+
+        const adAccountId = config.meta_ad_account_id;
+        const userToken = config.meta_user_token;
+
+        if (!adAccountId || !userToken) {
+            return res.json([]);
+        }
+
+        const https = require('https');
+        const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?access_token=${userToken}&fields=id,name,status,objective&limit=50`;
+
+        const data = await new Promise((resolve, reject) => {
+            https.get(url, (response) => {
+                let raw = '';
+                response.on('data', chunk => raw += chunk);
+                response.on('end', () => resolve(JSON.parse(raw)));
+            }).on('error', reject);
+        });
+
+        if (data.error) {
+            console.error('[Meta Campaigns Error]', data.error);
+            return res.json([]);
+        }
+
+        res.json(data.data || []);
+    } catch (err) {
+        console.error('[Meta Campaigns Catch]', err);
+        res.json([]);
     }
 });
 
@@ -863,7 +904,7 @@ app.post('/api/meta/sync-leads', async (req, res) => {
 // Disconnect Meta integration
 app.delete('/api/meta/disconnect', async (req, res) => {
     try {
-        const keys = ['meta_page_id', 'meta_page_name', 'meta_page_token', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected'];
+        const keys = ['meta_page_id', 'meta_page_name', 'meta_page_token', 'meta_ad_account_id', 'meta_ad_account_name', 'meta_connected', 'meta_user_token'];
         for (const key of keys) {
             await db.from('settings').delete().eq('key', key);
         }
