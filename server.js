@@ -779,18 +779,28 @@ app.post('/api/meta/sync-leads', async (req, res) => {
         });
 
         // 1. Fetch all Lead Forms for the Page
+        console.log(`[Sync] Fetching forms for page: ${pageId}`);
         const formsData = await getUrl(`https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name`);
-        if (formsData.error) throw new Error(formsData.error.message);
+        if (formsData.error) {
+            console.error('[Sync] Forms Fetch Error:', formsData.error);
+            throw new Error(formsData.error.message);
+        }
 
         const forms = formsData.data || [];
+        console.log(`[Sync] Found ${forms.length} forms:`, forms.map(f => f.name));
         let totalSynced = 0;
 
         // 2. Fetch leads for each form
         for (const form of forms) {
+            console.log(`[Sync] Fetching leads for form: ${form.name} (${form.id})`);
             const leadsData = await getUrl(`https://graph.facebook.com/v19.0/${form.id}/leads?access_token=${pageToken}&fields=id,field_data,created_time`);
-            if (leadsData.error) continue;
+            if (leadsData.error) {
+                console.error(`[Sync] Leads Fetch Error for form ${form.name}:`, leadsData.error);
+                continue;
+            }
 
             const leads = leadsData.data || [];
+            console.log(`[Sync] Form ${form.name} returned ${leads.length} leads raw`);
             for (const lead of leads) {
                 // Parse lead fields
                 const fields = { facebook_lead_id: lead.id };
