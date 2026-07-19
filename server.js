@@ -19,14 +19,27 @@ app.get('/api/leads', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
+    const pipeline = req.query.pipeline || 'Default Pipeline';
 
     try {
-        const { data, error } = await db
-            .from('leads')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .range(from, to);
+        // Fetch stages for this pipeline
+        const { data: stagesData } = await db.from('stages').select('name');
+        const stageNames = (stagesData || []).map(s => s.name).filter(name => {
+            if (pipeline === 'Default Pipeline') {
+                return !name.includes(':') || name.startsWith('Default Pipeline:');
+            } else {
+                return name.startsWith(`${pipeline}:`);
+            }
+        });
 
+        let query = db.from('leads').select('*').order('created_at', { ascending: false });
+        if (stageNames.length > 0) {
+            query = query.in('status', stageNames);
+        } else {
+            return res.json([]);
+        }
+
+        const { data, error } = await query.range(from, to);
         if (error) throw error;
         res.json(data || []);
     } catch (err) {
@@ -36,11 +49,25 @@ app.get('/api/leads', async (req, res) => {
 
 // Get total leads count for pagination
 app.get('/api/leads/count', async (req, res) => {
+    const pipeline = req.query.pipeline || 'Default Pipeline';
     try {
-        const { count, error } = await db
-            .from('leads')
-            .select('*', { count: 'exact', head: true });
+        const { data: stagesData } = await db.from('stages').select('name');
+        const stageNames = (stagesData || []).map(s => s.name).filter(name => {
+            if (pipeline === 'Default Pipeline') {
+                return !name.includes(':') || name.startsWith('Default Pipeline:');
+            } else {
+                return name.startsWith(`${pipeline}:`);
+            }
+        });
 
+        let query = db.from('leads').select('*', { count: 'exact', head: true });
+        if (stageNames.length > 0) {
+            query = query.in('status', stageNames);
+        } else {
+            return res.json({ total: 0 });
+        }
+
+        const { count, error } = await query;
         if (error) throw error;
         res.json({ total: count || 0 });
     } catch (err) {
@@ -103,13 +130,14 @@ app.get('/api/leads/latest', async (req, res) => {
 
 // Add new lead
 app.post('/api/leads', async (req, res) => {
-    const { name, email, phone, source } = req.body;
+    const { name, email, phone, source, status } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
     try {
+        const finalStatus = status || 'new';
         const { data, error } = await db
             .from('leads')
-            .insert([{ name, email: email || null, phone: phone || null, source: source || 'Manual' }])
+            .insert([{ name, email: email || null, phone: phone || null, source: source || 'Manual', status: finalStatus }])
             .select();
 
         if (error) throw error;
@@ -189,6 +217,7 @@ app.delete('/api/leads', async (req, res) => {
 // --- FLOWS (STAGES) API ---
 
 app.get('/api/stages', async (req, res) => {
+    const pipeline = req.query.pipeline || 'Default Pipeline';
     try {
         const { data, error } = await db
             .from('stages')
@@ -196,7 +225,17 @@ app.get('/api/stages', async (req, res) => {
             .order('order_index', { ascending: true });
 
         if (error) throw error;
-        res.json(data || []);
+
+        // Filter stages belonging to the requested pipeline
+        const filtered = (data || []).filter(stage => {
+            if (pipeline === 'Default Pipeline') {
+                return !stage.name.includes(':') || stage.name.startsWith('Default Pipeline:');
+            } else {
+                return stage.name.startsWith(`${pipeline}:`);
+            }
+        });
+
+        res.json(filtered);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -653,6 +692,114 @@ app.post('/api/leads/remap', async (req, res) => {
     }
 });
 
+// --- PIPELINES API ---
+
+app.get('/api/pipelines', async (req, res) => {
+    try {
+        const { data, error } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['Default Pipeline'];
+        if (data && data.value) {
+            try {
+                pipelines = JSON.parse(data.value);
+            } catch (e) {}
+        }
+        res.json(pipelines);
+    } catch (err) {
+        res.json(['Default Pipeline']);
+    }
+});
+
+app.post('/api/pipelines', async (req, res) => {
+    const { name } = req.body;
+    if (!name || name.trim() === '') {
+        return res.status(400).json({ error: 'Pipeline name is required' });
+    }
+    const cleanName = name.trim();
+    if (cleanName === 'Default Pipeline') {
+        return res.status(400).json({ error: 'Cannot create Default Pipeline' });
+    }
+
+    try {
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['Default Pipeline'];
+        if (settingsData && settingsData.value) {
+            try {
+                pipelines = JSON.parse(settingsData.value);
+            } catch (e) {}
+        }
+
+        if (pipelines.includes(cleanName)) {
+            return res.status(400).json({ error: 'Pipeline already exists' });
+        }
+
+        pipelines.push(cleanName);
+        await db.from('settings').upsert({ key: 'pipelines', value: JSON.stringify(pipelines) }, { onConflict: 'key' });
+
+        // Add default stages for this pipeline
+        const defaultStages = [
+            { name: `${cleanName}:New Lead`, color: '#6366f1', order_index: 0 },
+            { name: `${cleanName}:Contacted`, color: '#3b82f6', order_index: 1 },
+            { name: `${cleanName}:Qualified`, color: '#10b981', order_index: 2 },
+            { name: `${cleanName}:Proposal`, color: '#f59e0b', order_index: 3 },
+            { name: `${cleanName}:Won`, color: '#10b981', order_index: 4 },
+            { name: `${cleanName}:Lost`, color: '#ef4444', order_index: 5 }
+        ];
+
+        for (const stage of defaultStages) {
+            await db.from('stages').upsert(stage, { onConflict: 'name' });
+        }
+
+        res.json({ success: true, pipelines });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+app.get('/api/pipelines/mappings', async (req, res) => {
+    try {
+        const { data } = await db.from('settings').select('*').eq('key', 'form_pipeline_mappings').single();
+        let mappings = {};
+        if (data && data.value) {
+            try {
+                mappings = JSON.parse(data.value);
+            } catch (e) {}
+        }
+        res.json(mappings);
+    } catch (err) {
+        res.json({});
+    }
+});
+
+app.post('/api/pipelines/mappings', async (req, res) => {
+    const { mappings } = req.body;
+    try {
+        await db.from('settings').upsert({ key: 'form_pipeline_mappings', value: JSON.stringify(mappings || {}) }, { onConflict: 'key' });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+async function getPipelineStageForForm(formId) {
+    if (!formId) return 'new';
+    try {
+        const { data: mappingsData } = await db.from('settings').select('*').eq('key', 'form_pipeline_mappings').single();
+        if (mappingsData && mappingsData.value) {
+            const mappings = JSON.parse(mappingsData.value);
+            const pipeline = mappings[formId];
+            if (pipeline && pipeline !== 'Default Pipeline') {
+                const { data: stages } = await db.from('stages').select('name').like('name', `${pipeline}:%`).order('order_index', { ascending: true });
+                if (stages && stages.length > 0) {
+                    return stages[0].name;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[Pipeline Helper Error]', e);
+    }
+    return 'new';
+}
+
 // --- META INTEGRATION API ---
 
 const https = require('https');
@@ -914,11 +1061,13 @@ app.post('/api/meta/sync-leads', async (req, res) => {
         // 2. Fetch leads for each form
         for (const form of forms) {
             console.log(`[Sync] Fetching leads for form: ${form.name} (${form.id})`);
-            const leadsData = await getUrl(`https://graph.facebook.com/v19.0/${form.id}/leads?access_token=${pageToken}&fields=id,field_data,created_time`);
+            const leadsData = await getFacebookData(`https://graph.facebook.com/v19.0/${form.id}/leads?access_token=${pageToken}&fields=id,field_data,created_time`);
             if (leadsData.error) {
                 console.error(`[Sync] Leads Fetch Error for form ${form.name}:`, leadsData.error);
                 continue;
             }
+
+            const status = await getPipelineStageForForm(form.id);
 
             const leads = leadsData.data || [];
             console.log(`[Sync] Form ${form.name} returned ${leads.length} leads raw`);
@@ -961,6 +1110,7 @@ app.post('/api/meta/sync-leads', async (req, res) => {
                     email,
                     phone,
                     source: 'Meta Ads',
+                    status,
                     created_at: lead.created_time || new Date().toISOString(),
                     custom_data: fields
                 }]).select();
@@ -1665,6 +1815,7 @@ app.post('/api/webhooks/meta', async (req, res) => {
         if (!change || change.field !== 'leadgen') return res.sendStatus(200);
 
         const leadgenId = change.value.leadgen_id;
+        const formId = change.value.form_id;
         const leadData = await fetchMetaLeadDetails(leadgenId);
         
         if (leadData) {
@@ -1674,6 +1825,7 @@ app.post('/api/webhooks/meta', async (req, res) => {
                 return res.json({ success: true, message: 'Test lead ignored' });
             }
 
+            const status = await getPipelineStageForForm(formId);
             const createdAt = leadData.created_time || new Date().toISOString();
             const { data, error } = await db
                 .from('leads')
@@ -1682,6 +1834,7 @@ app.post('/api/webhooks/meta', async (req, res) => {
                     email: leadData.email || null,
                     phone: leadData.phone || null,
                     source: 'Meta Ads',
+                    status,
                     created_at: createdAt,
                     custom_data: leadData
                 }])
