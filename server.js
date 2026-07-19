@@ -754,6 +754,7 @@ app.post('/api/meta/save-page', async (req, res) => {
     let { pageId, pageToken, pageName, adAccountId, adAccountName, userToken } = req.body;
     if (!pageId) return res.status(400).json({ error: 'pageId required' });
 
+    let fetchError = null;
     // Fetch Page access token using User access token if pageToken is missing or is the string "undefined"
     if ((!pageToken || pageToken === 'undefined') && userToken) {
         try {
@@ -762,15 +763,17 @@ app.post('/api/meta/save-page', async (req, res) => {
             if (pageData && pageData.access_token) {
                 pageToken = pageData.access_token;
             } else {
+                fetchError = pageData.error ? pageData.error.message : JSON.stringify(pageData);
                 console.warn('[Meta Save Page] Could not fetch page access token from Facebook:', pageData);
             }
         } catch (e) {
+            fetchError = e.message;
             console.error('[Meta Save Page] Failed to fetch page access token:', e);
         }
     }
 
     if (!pageToken || pageToken === 'undefined') {
-        return res.status(400).json({ error: 'Valid pageToken is required' });
+        return res.status(400).json({ error: `Valid pageToken is required. Facebook fetch error: ${fetchError || 'No userToken provided or page access denied'}` });
     }
 
     try {
