@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let leadsLimit = 20;
     let totalLeads = 0;
 
-    let currentPipeline = 'SaladO';
+    let currentPipeline = '';
 
     // --- Backend API Sync Logic ---
 
@@ -106,15 +106,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLeads() {
         const tbody = document.getElementById('leads-table-body');
-        if (tbody) {
-            tbody.innerHTML = `
-                <tr>
-                    <td colspan="7" style="text-align:center; padding:60px;">
-                        <div class="loader-spinner" style="display:inline-block; width:28px; height:28px; border:3px solid #e2e8f0; border-radius:50%; border-top-color:#3b4250; animation:spin 1s linear infinite; margin-bottom:12px;"></div>
-                        <p style="font-size:13px; color:#7a8292; font-weight:400; margin:0;">Loading leads...</p>
-                    </td>
-                </tr>
-            `;
+        if (!currentPipeline) {
+            if (tbody) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" style="text-align:center; padding:60px;">
+                            <p style="font-size:14px; color:#7a8292; font-weight:500; margin-bottom:8px;">No pipeline created</p>
+                            <button class="btn btn-primary btn-sm" onclick="openCreatePipelineModal()" style="display:inline-flex; align-items:center; gap:4px; margin:0 auto;">
+                                <i data-feather="plus" style="width:14px; height:14px;"></i> Create Pipeline
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+            const boardContainer = document.getElementById('leads-board-view');
+            if (boardContainer) {
+                boardContainer.innerHTML = `
+                    <div style="text-align:center; padding:80px; width:100%;">
+                        <p style="font-size:14px; color:#7a8292; font-weight:500; margin-bottom:8px;">No pipeline created</p>
+                        <button class="btn btn-primary btn-sm" onclick="openCreatePipelineModal()" style="display:inline-flex; align-items:center; gap:4px; margin:0 auto;">
+                            <i data-feather="plus" style="width:14px; height:14px;"></i> Create Pipeline
+                        </button>
+                    </div>
+                `;
+            }
+            if (window.feather) window.feather.replace();
+            return;
         }
 
         const countData = await fetchData(`/api/leads/count?pipeline=${encodeURIComponent(currentPipeline)}`);
@@ -138,6 +155,11 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     async function loadStages() {
+        if (!currentPipeline) {
+            currentStages = [];
+            renderFlows();
+            return [];
+        }
         const stages = await fetchData(`/api/stages?pipeline=${encodeURIComponent(currentPipeline)}`);
         if (stages) {
             currentStages = stages;
@@ -151,11 +173,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('activePipelineSelect');
         if (!select) return;
 
-        const pipelines = await fetchData('/api/pipelines');
-        if (pipelines) {
-            const originalVal = select.value || currentPipeline;
+        const pipelines = await fetchData('/api/pipelines') || [];
+        if (pipelines.length === 0) {
+            select.innerHTML = `<option value="">No pipeline created</option>`;
+            select.disabled = true;
+            currentPipeline = '';
+            localStorage.removeItem('crm_active_pipeline');
+        } else {
+            select.disabled = false;
+            const savedPipeline = localStorage.getItem('crm_active_pipeline');
+            const originalVal = pipelines.includes(savedPipeline) ? savedPipeline : pipelines[0];
             select.innerHTML = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
-            currentPipeline = select.value || 'SaladO';
+            currentPipeline = select.value;
+            localStorage.setItem('crm_active_pipeline', currentPipeline);
         }
     }
 
@@ -180,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (pipelineSelect) {
         pipelineSelect.addEventListener('change', async () => {
             currentPipeline = pipelineSelect.value;
+            localStorage.setItem('crm_active_pipeline', currentPipeline);
             currentPage = 1;
             await loadStages();
             await loadLeads();
@@ -215,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast(`Pipeline "${name}" created successfully!`);
             closeCreatePipelineModal();
             currentPipeline = name;
+            localStorage.setItem('crm_active_pipeline', name);
             
             await loadPipelines();
             const select = document.getElementById('activePipelineSelect');

@@ -718,7 +718,7 @@ app.post('/api/leads/remap', async (req, res) => {
 app.get('/api/pipelines', async (req, res) => {
     try {
         const { data, error } = await db.from('settings').select('*').eq('key', 'pipelines').single();
-        let pipelines = ['SaladO'];
+        let pipelines = [];
         if (data && data.value) {
             try {
                 pipelines = JSON.parse(data.value);
@@ -726,7 +726,7 @@ app.get('/api/pipelines', async (req, res) => {
         }
         res.json(pipelines);
     } catch (err) {
-        res.json(['SaladO']);
+        res.json([]);
     }
 });
 
@@ -742,7 +742,7 @@ app.post('/api/pipelines', async (req, res) => {
 
     try {
         const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
-        let pipelines = ['SaladO'];
+        let pipelines = [];
         if (settingsData && settingsData.value) {
             try {
                 pipelines = JSON.parse(settingsData.value);
