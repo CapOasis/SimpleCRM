@@ -193,6 +193,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadPipelines() {
         const select = document.getElementById('activePipelineSelect');
+        const flowsSelect = document.getElementById('flowsPipelineSelect');
         if (!select) return;
 
         const deleteBtn = document.getElementById('deletePipelineBtn');
@@ -200,15 +201,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pipelines.length === 0) {
             select.innerHTML = `<option value="">No pipeline created</option>`;
             select.disabled = true;
+            if (flowsSelect) {
+                flowsSelect.innerHTML = `<option value="">No pipeline created</option>`;
+                flowsSelect.disabled = true;
+            }
             if (deleteBtn) deleteBtn.style.display = 'none';
             currentPipeline = '';
             localStorage.removeItem('crm_active_pipeline');
         } else {
             select.disabled = false;
+            if (flowsSelect) flowsSelect.disabled = false;
             if (deleteBtn) deleteBtn.style.display = 'inline-flex';
             const savedPipeline = localStorage.getItem('crm_active_pipeline');
             const originalVal = pipelines.includes(savedPipeline) ? savedPipeline : pipelines[0];
-            select.innerHTML = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
+            
+            const optionsHtml = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
+            select.innerHTML = optionsHtml;
+            if (flowsSelect) flowsSelect.innerHTML = optionsHtml;
+            
             currentPipeline = select.value;
             localStorage.setItem('crm_active_pipeline', currentPipeline);
         }
@@ -232,10 +242,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Pipeline Selector & Modal Event Handlers
     const pipelineSelect = document.getElementById('activePipelineSelect');
+    const flowsPipelineSelect = document.getElementById('flowsPipelineSelect');
+
     if (pipelineSelect) {
         pipelineSelect.addEventListener('change', async () => {
             currentPipeline = pipelineSelect.value;
             localStorage.setItem('crm_active_pipeline', currentPipeline);
+            if (flowsPipelineSelect) flowsPipelineSelect.value = currentPipeline;
+            currentPage = 1;
+            await loadStages();
+            await loadLeads();
+        });
+    }
+
+    if (flowsPipelineSelect) {
+        flowsPipelineSelect.addEventListener('change', async () => {
+            currentPipeline = flowsPipelineSelect.value;
+            localStorage.setItem('crm_active_pipeline', currentPipeline);
+            if (pipelineSelect) pipelineSelect.value = currentPipeline;
             currentPage = 1;
             await loadStages();
             await loadLeads();
@@ -276,6 +300,8 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadPipelines();
             const select = document.getElementById('activePipelineSelect');
             if (select) select.value = name;
+            const fSelect = document.getElementById('flowsPipelineSelect');
+            if (fSelect) fSelect.value = name;
             
             await loadStages();
             await loadLeads();
@@ -667,34 +693,51 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = document.getElementById('flows-list');
         if (!list) return;
 
-        const firstStage = currentStages.find(s => s.name === 'new');
-        const lastStage = currentStages.find(s => s.name === 'closed');
-        const middleStages = currentStages.filter(s => s.name !== 'new' && s.name !== 'closed');
+        if (currentStages.length === 0) {
+            if (lockedFirst) lockedFirst.innerHTML = '';
+            if (lockedLast) lockedLast.innerHTML = '';
+            list.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No stages defined for this pipeline.</div>';
+            return;
+        }
+
+        // Sort by order_index just to be safe
+        const sortedStages = [...currentStages].sort((a, b) => a.order_index - b.order_index);
+
+        const firstStage = sortedStages[0];
+        const lastStage = sortedStages.length > 1 ? sortedStages[sortedStages.length - 1] : null;
+        const middleStages = sortedStages.slice(1, lastStage ? -1 : undefined);
 
         // Render locked first
         if (lockedFirst && firstStage) {
             lockedFirst.innerHTML = renderLockedStageCard(firstStage, 'Start');
+        } else if (lockedFirst) {
+            lockedFirst.innerHTML = '';
         }
 
         // Render locked last
         if (lockedLast && lastStage) {
             lockedLast.innerHTML = renderLockedStageCard(lastStage, 'End');
+        } else if (lockedLast) {
+            lockedLast.innerHTML = '';
         }
 
         // Render draggable middle stages
-        list.innerHTML = middleStages.map(s => `
-            <div class="flow-card" data-id="${s.id}" style="border-left: 4px solid ${s.color}">
-                <div class="flow-card-drag"><i data-feather="menu"></i></div>
-                <div class="flow-card-info">
-                    <div class="automation-title">${capitalize(s.name)}</div>
-                    <div class="automation-desc">Drag to reorder</div>
+        list.innerHTML = middleStages.map(s => {
+            const displayStageName = s.name.includes(':') ? s.name.split(':')[1] : s.name;
+            return `
+                <div class="flow-card" data-id="${s.id}" style="border-left: 4px solid ${s.color}">
+                    <div class="flow-card-drag"><i data-feather="menu"></i></div>
+                    <div class="flow-card-info">
+                        <div class="automation-title">${capitalize(displayStageName)}</div>
+                        <div class="automation-desc">Drag to reorder</div>
+                    </div>
+                    <div class="flow-card-color" style="background: ${s.color}; width: 14px; height: 14px; border-radius: 50%;"></div>
+                    <button class="btn btn-secondary btn-sm" onclick="deleteStage(${s.id})">
+                        <i data-feather="trash-2" style="width:14px;height:14px"></i>
+                    </button>
                 </div>
-                <div class="flow-card-color" style="background: ${s.color}; width: 14px; height: 14px; border-radius: 50%;"></div>
-                <button class="btn btn-secondary btn-sm" onclick="deleteStage(${s.id})">
-                    <i data-feather="trash-2" style="width:14px;height:14px"></i>
-                </button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
 
         // Init SortableJS for reordering
         if (typeof Sortable !== 'undefined') {
@@ -704,18 +747,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 handle: '.flow-card-drag',
                 onEnd: async function () {
                     const cards = list.querySelectorAll('.flow-card');
-                    // 'new' is always 0, so middle stages start at 1
+                    // first stage is always order 0, middle stages start at 1
                     const order = Array.from(cards).map((card, i) => ({
                         id: parseInt(card.dataset.id),
-                        order_index: i + 1 // +1 because 'new' is at 0
+                        order_index: i + 1
                     }));
                     await fetchData('/api/stages/reorder', {
                         method: 'PUT',
                         body: JSON.stringify({ order })
                     });
                     await loadStages();
-                    const leads = await fetchData('/api/leads');
-                    if (leads) renderLeads(leads);
                 }
             });
         }
@@ -724,12 +765,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderLockedStageCard(stage, label) {
+        const displayStageName = stage.name.includes(':') ? stage.name.split(':')[1] : stage.name;
+        const desc = label === 'Start' ? 'Locked — System stage, always first' : 'Locked — System stage, always last';
         return `
             <div class="flow-card flow-card-locked" style="border-left: 4px solid ${stage.color}">
                 <div class="flow-card-drag" style="opacity: 0.2; cursor: default"><i data-feather="lock"></i></div>
                 <div class="flow-card-info">
-                    <div class="automation-title">${capitalize(stage.name)}</div>
-                    <div class="automation-desc">${label} — System stage, always ${label === 'Start' ? 'first' : 'last'}</div>
+                    <div class="automation-title">${capitalize(displayStageName)} <span style="font-size: 11px; font-weight: 500; padding: 2px 6px; border-radius: 4px; background: var(--bg-light); color: var(--text-muted); margin-left: 8px;">${label}</span></div>
+                    <div class="automation-desc">${desc}</div>
                 </div>
                 <div class="flow-card-color" style="background: ${stage.color}; width: 14px; height: 14px; border-radius: 50%;"></div>
             </div>
