@@ -2579,6 +2579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     viewToggles.forEach(toggle => {
         toggle.addEventListener('click', () => {
             const target = toggle.getAttribute('data-target');
+            localStorage.setItem('crm_leads_view', target);
 
             // Update Toggle Buttons
             viewToggles.forEach(bt => bt.classList.remove('active'));
@@ -2599,6 +2600,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // Restore Saved Leads View Choice
+    const savedLeadsView = localStorage.getItem('crm_leads_view') || 'leads-table-view';
+    const activeToggle = document.querySelector(`.view-toggle[data-target="${savedLeadsView}"]`);
+    if (activeToggle) {
+        // Toggle view containers immediately to avoid flashing
+        viewToggles.forEach(bt => bt.classList.remove('active'));
+        activeToggle.classList.add('active');
+        viewContainers.forEach(container => {
+            if (container.id === savedLeadsView) {
+                container.classList.add('active');
+            } else {
+                container.classList.remove('active');
+            }
+        });
+    }
 
     // Final global icon replacement
     if (typeof feather !== 'undefined') {
