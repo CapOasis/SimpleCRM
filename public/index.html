@@ -209,10 +209,14 @@
             <section id="flows" class="view-section">
                 <div class="section-header">
                     <div class="section-title">
-                        <h1>Pipeline Flows</h1>
-                        <p>Customize your lead journey. Drag to reorder stages between New and Closed.</p>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
+                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
+                        Pipeline Flows
+                        <span class="info-btn" data-tooltip-multiline="Customize your lead journey. Drag to reorder stages between New and Closed." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
                         <select id="flowsPipelineSelect" class="btn btn-secondary" style="height:36px; padding:0 12px; font-size:13px; font-weight:600; border-color: var(--primary-color); color: var(--primary-color); background: var(--bg-card);">
                         </select>
                         <button class="btn btn-primary" onclick="openAddStageModal()">
@@ -673,8 +677,12 @@
         <section id="dashboard" class="view-section">
             <div class="section-header">
                 <div class="section-title">
-                    <h1>Dashboard Overview</h1>
-                    <p>High level insights of your CRM pipeline and lead conversion.</p>
+                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
+                        Dashboard Overview
+                        <span class="info-btn" data-tooltip-multiline="High level insights of your CRM pipeline and lead conversion." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
                 </div>
                 <div class="section-actions">
                     <select id="dashboardRange" class="btn btn-secondary" style="padding: 0 12px; height: 40px;">
@@ -760,8 +768,12 @@
         <section id="integrations" class="view-section">
             <div class="section-header">
                 <div class="section-title">
-                    <h1>Integrations</h1>
-                    <p>Configure your lead sources, data mapping, and communication providers.</p>
+                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
+                        Integrations
+                        <span class="info-btn" data-tooltip-multiline="Configure your lead sources, data mapping, and communication providers." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
                 </div>
             </div>
 
@@ -873,8 +885,12 @@
             <div id="tab-mapping" class="tab-content">
                 <div class="section-header" style="margin-bottom: 24px;">
                     <div class="section-title">
-                        <h2>Lead Field Mapping</h2>
-                        <p>Map your Facebook Lead Form columns to CRM fields. Starred fields are required. All other columns are automatically saved under Custom Data.</p>
+                        <h2 style="display: inline-flex; align-items: center; gap: 8px; margin: 0;">
+                            Lead Field Mapping
+                            <span class="info-btn" data-tooltip-multiline="Map your Facebook Lead Form columns to CRM fields. Starred fields are required. All other columns are automatically saved under Custom Data." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                                <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                            </span>
+                        </h2>
                     </div>
                     <div style="display:flex; gap:8px; align-items:center;">
                         <select id="mappingPipelineSelect" class="btn btn-secondary" style="height:36px; padding:0 12px; font-size:13px; font-weight:600; border-color: var(--primary-color); color: var(--primary-color); background: var(--bg-card);">
@@ -998,8 +1014,12 @@
         <section id="activity" class="view-section">
             <div class="section-header">
                 <div class="section-title">
-                    <h1>Activity Feed</h1>
-                    <p>A real-time log of all automations, status changes, and incoming leads.</p>
+                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
+                        Activity Feed
+                        <span class="info-btn" data-tooltip-multiline="A real-time log of all automations, status changes, and incoming leads." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
                 </div>
             </div>
             <div class="card">
@@ -1014,8 +1034,12 @@
         <section id="team" class="view-section">
             <div class="section-header">
                 <div class="section-title">
-                    <h1>Team Management</h1>
-                    <p>Manage your team members, credentials, and their roles/access permissions in the CRM.</p>
+                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
+                        Team Management
+                        <span class="info-btn" data-tooltip-multiline="Manage your team members, credentials, and their roles/access permissions in the CRM." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
                 </div>
                 <div style="display:flex; gap:8px;">
                     <button class="btn btn-primary" onclick="toggleAddTeamForm()">
@@ -1109,10 +1133,12 @@
             <div class="section-header"
                 style="margin-bottom: 32px; max-width: 760px; margin-left: auto; margin-right: auto;">
                 <div class="section-title">
-                    <h1 style="font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 6px;">Account &amp;
-                        Settings</h1>
-                    <p style="color: #64748b; font-size: 14px;">Manage your security credentials, profile
-                        information, and interface preferences.</p>
+                    <h1 style="font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 8px;">
+                        Account &amp; Settings
+                        <span class="info-btn" data-tooltip-multiline="Manage your security credentials, profile information, and interface preferences." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s; font-size: 14px; font-weight: normal;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h1>
                 </div>
             </div>
 
