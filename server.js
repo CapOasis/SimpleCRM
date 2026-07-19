@@ -1073,7 +1073,7 @@ app.post('/api/meta/sync-leads', async (req, res) => {
             console.log(`[Sync] Form ${form.name} returned ${leads.length} leads raw`);
             for (const lead of leads) {
                 // Parse lead fields
-                const fields = { facebook_lead_id: lead.id };
+                const fields = { facebook_lead_id: lead.id, form_id: form.id };
                 if (lead.field_data) {
                     lead.field_data.forEach(item => {
                         if (item.values && item.values[0]) {
@@ -1087,22 +1087,26 @@ app.post('/api/meta/sync-leads', async (req, res) => {
                 const phone = fields.phone_number || fields.phone || null;
 
                 // Check for duplicates in DB based on email (if exists) or custom_data matching the Facebook Lead ID
-                let isDuplicate = false;
+                let existingLeadId = null;
                 if (email) {
                     const { data: dupEmail } = await db.from('leads').select('id').eq('email', email).limit(1);
-                    if (dupEmail && dupEmail.length > 0) isDuplicate = true;
+                    if (dupEmail && dupEmail.length > 0) existingLeadId = dupEmail[0].id;
                 }
 
-                if (!isDuplicate) {
+                if (!existingLeadId) {
                     // Search in JSONB custom_data field for the matching facebook_lead_id
                     const { data: dupFbId } = await db.from('leads')
                         .select('id')
                         .contains('custom_data', { facebook_lead_id: lead.id })
                         .limit(1);
-                    if (dupFbId && dupFbId.length > 0) isDuplicate = true;
+                    if (dupFbId && dupFbId.length > 0) existingLeadId = dupFbId[0].id;
                 }
 
-                if (isDuplicate) continue;
+                if (existingLeadId) {
+                    // Lead exists. Update its status/stage to the current form's mapped pipeline stage status
+                    await db.from('leads').update({ status }).eq('id', existingLeadId);
+                    continue;
+                }
 
                 // Insert into DB
                 const { error: insertError, data: insertedRow } = await db.from('leads').insert([{
@@ -1836,7 +1840,7 @@ app.post('/api/webhooks/meta', async (req, res) => {
                     source: 'Meta Ads',
                     status,
                     created_at: createdAt,
-                    custom_data: leadData
+                    custom_data: { ...leadData, form_id: formId }
                 }])
                 .select();
 
