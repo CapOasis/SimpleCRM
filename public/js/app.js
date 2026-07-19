@@ -194,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadPipelines() {
         const select = document.getElementById('activePipelineSelect');
         const flowsSelect = document.getElementById('flowsPipelineSelect');
+        const mappingSelect = document.getElementById('mappingPipelineSelect');
         if (!select) return;
 
         const deleteBtn = document.getElementById('deletePipelineBtn');
@@ -205,12 +206,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 flowsSelect.innerHTML = `<option value="">No pipeline created</option>`;
                 flowsSelect.disabled = true;
             }
+            if (mappingSelect) {
+                mappingSelect.innerHTML = `<option value="">No pipeline created</option>`;
+                mappingSelect.disabled = true;
+            }
             if (deleteBtn) deleteBtn.style.display = 'none';
             currentPipeline = '';
             localStorage.removeItem('crm_active_pipeline');
         } else {
             select.disabled = false;
             if (flowsSelect) flowsSelect.disabled = false;
+            if (mappingSelect) mappingSelect.disabled = false;
             if (deleteBtn) deleteBtn.style.display = 'inline-flex';
             const savedPipeline = localStorage.getItem('crm_active_pipeline');
             const originalVal = pipelines.includes(savedPipeline) ? savedPipeline : pipelines[0];
@@ -218,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const optionsHtml = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
             select.innerHTML = optionsHtml;
             if (flowsSelect) flowsSelect.innerHTML = optionsHtml;
+            if (mappingSelect) mappingSelect.innerHTML = optionsHtml;
             
             currentPipeline = select.value;
             localStorage.setItem('crm_active_pipeline', currentPipeline);
@@ -243,12 +250,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Pipeline Selector & Modal Event Handlers
     const pipelineSelect = document.getElementById('activePipelineSelect');
     const flowsPipelineSelect = document.getElementById('flowsPipelineSelect');
+    const mappingPipelineSelect = document.getElementById('mappingPipelineSelect');
 
     if (pipelineSelect) {
         pipelineSelect.addEventListener('change', async () => {
             currentPipeline = pipelineSelect.value;
             localStorage.setItem('crm_active_pipeline', currentPipeline);
             if (flowsPipelineSelect) flowsPipelineSelect.value = currentPipeline;
+            if (mappingPipelineSelect) mappingPipelineSelect.value = currentPipeline;
             currentPage = 1;
             await loadStages();
             await loadLeads();
@@ -261,6 +270,20 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPipeline = flowsPipelineSelect.value;
             localStorage.setItem('crm_active_pipeline', currentPipeline);
             if (pipelineSelect) pipelineSelect.value = currentPipeline;
+            if (mappingPipelineSelect) mappingPipelineSelect.value = currentPipeline;
+            currentPage = 1;
+            await loadStages();
+            await loadLeads();
+            await refreshMappingSchema();
+        });
+    }
+
+    if (mappingPipelineSelect) {
+        mappingPipelineSelect.addEventListener('change', async () => {
+            currentPipeline = mappingPipelineSelect.value;
+            localStorage.setItem('crm_active_pipeline', currentPipeline);
+            if (pipelineSelect) pipelineSelect.value = currentPipeline;
+            if (flowsPipelineSelect) flowsPipelineSelect.value = currentPipeline;
             currentPage = 1;
             await loadStages();
             await loadLeads();
@@ -304,6 +327,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (select) select.value = name;
             const fSelect = document.getElementById('flowsPipelineSelect');
             if (fSelect) fSelect.value = name;
+            const mSelect = document.getElementById('mappingPipelineSelect');
+            if (mSelect) mSelect.value = name;
             
             await loadStages();
             await loadLeads();
