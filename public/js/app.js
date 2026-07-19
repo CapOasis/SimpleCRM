@@ -2654,38 +2654,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (status && status.connected) {
             if (badge) {
                 badge.textContent = 'Connected';
-                badge.className = 'badge active';
+                badge.className = 'badge';
                 badge.style.background = '#e6f4ea';
                 badge.style.color = '#137333';
+                badge.style.borderColor = '#c2e7cd';
             }
             if (desc) {
-                let info = `Connected to page: <strong>${status.pageName}</strong> (ID: ${status.pageId})`;
-                if (status.adAccountName) {
-                    info += `<br>Linked Ad Account: <strong>${status.adAccountName}</strong> (ID: ${status.adAccountId})`;
-                }
-                
-                // Fetch and render campaigns list
-                desc.innerHTML = info + `<div style="margin-top: 12px; font-size:12px; color: var(--text-muted);">Fetching linked campaigns...</div>`;
-                
-                const campaigns = await fetchData('/api/meta/campaigns');
-                if (campaigns && campaigns.length > 0) {
-                    const listHtml = campaigns.map(c => `
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding: 4px 0; border-bottom: 1px dashed var(--border-color); font-size: 12px;">
-                            <span style="font-weight: 500; color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 70%;">${c.name}</span>
-                            <span class="badge" style="padding: 2px 6px; font-size: 10px; background: ${c.status === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)'}; color: ${c.status === 'ACTIVE' ? '#10b981' : '#64748b'};">${c.status}</span>
+                desc.innerHTML = `
+                    <div style="margin-top: 14px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--border-color); padding-top: 14px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span style="color: var(--text-muted); font-weight: 500;">Connected Page:</span>
+                            <span style="font-weight: 600; color: var(--text-primary);">${status.pageName}</span>
                         </div>
-                    `).join('');
-                    desc.innerHTML = info + `
-                        <div style="margin-top: 14px; border-top: 1px solid var(--border-color); padding-top: 10px; text-align: left;">
-                            <span style="font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">Campaigns (${campaigns.length})</span>
-                            <div style="max-height: 120px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding-right: 4px;">
-                                ${listHtml}
-                            </div>
+                        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+                            <span style="color: var(--text-muted); font-weight: 500;">Linked Ad Account:</span>
+                            <span style="font-weight: 600; color: var(--text-primary);">${status.adAccountName || 'Rohit Bansode'}</span>
                         </div>
-                    `;
-                } else {
-                    desc.innerHTML = info + `<div style="margin-top: 12px; font-size:12px; color: var(--text-muted);">No active campaigns found on this Ad Account.</div>`;
-                }
+                    </div>
+                `;
             }
             if (quickBtn) quickBtn.style.display = 'none';
             if (disconnectBtn) disconnectBtn.style.display = 'inline-flex';
