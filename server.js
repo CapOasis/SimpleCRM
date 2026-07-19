@@ -796,6 +796,52 @@ app.get('/api/meta/campaigns', async (req, res) => {
     }
 });
 
+// Get all leadgen forms for the connected Page
+app.get('/api/meta/forms', async (req, res) => {
+    try {
+        const { data: settingsData } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_token', 'meta_page_name']);
+        const config = {};
+        (settingsData || []).forEach(s => config[s.key] = s.value);
+
+        const pageId = config.meta_page_id;
+        const pageToken = config.meta_page_token;
+        const pageName = config.meta_page_name;
+
+        if (!pageId || !pageToken) {
+            return res.json([]);
+        }
+
+        const https = require('https');
+        const url = `https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name,status,leads_count&limit=100`;
+
+        const data = await new Promise((resolve, reject) => {
+            https.get(url, (response) => {
+                let raw = '';
+                response.on('data', chunk => raw += chunk);
+                response.on('end', () => resolve(JSON.parse(raw)));
+            }).on('error', reject);
+        });
+
+        if (data.error) {
+            console.error('[Meta Forms Error]', data.error);
+            return res.json([]);
+        }
+
+        const forms = (data.data || []).map(f => ({
+            id: f.id,
+            name: f.name,
+            pageName: pageName,
+            status: f.status || 'ACTIVE',
+            leadsCount: f.leads_count || 0
+        }));
+
+        res.json(forms);
+    } catch (err) {
+        console.error('[Meta Forms Catch]', err);
+        res.json([]);
+    }
+});
+
 // Sync existing leads from Facebook page forms
 app.post('/api/meta/sync-leads', async (req, res) => {
     try {

@@ -177,6 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
                 document.getElementById(`tab-${target}`).classList.add('active');
 
+                if (target === 'facebook-forms') {
+                    loadFacebookFormsTab();
+                }
+
                 if (window.feather) window.feather.replace();
             });
         });
@@ -2699,6 +2703,106 @@ document.addEventListener('DOMContentLoaded', () => {
             if (syncBtn) syncBtn.style.display = 'none';
         }
         refreshIcons();
+    };
+
+    window.loadFacebookFormsTab = async () => {
+        const container = document.getElementById('meta-forms-container');
+        if (!container) return;
+
+        container.innerHTML = '<div class="card" style="padding: 40px; text-align: center;"><div style="font-size: 14px; color: var(--text-muted);">Fetching Facebook lead forms...</div></div>';
+
+        // Check if Meta is connected
+        const status = await fetchData('/api/meta/status');
+        if (!status || !status.connected) {
+            container.innerHTML = `
+                <div class="card" style="padding: 40px; text-align: center;">
+                    <div style="background: rgba(6, 104, 225, 0.1); color: #0668E1; width: 64px; height: 64px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; margin: 0 auto 16px;">
+                        <i data-feather="facebook" style="width: 32px; height: 32px;"></i>
+                    </div>
+                    <h3 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 8px;">Facebook Account Not Connected</h3>
+                    <p style="font-size: 14px; color: var(--text-muted); margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto;">
+                        Connect your Facebook account under the <strong>Lead Sources</strong> tab to view and manage your lead generation forms.
+                    </p>
+                    <button class="btn btn-primary" onclick="document.querySelector('[data-tab=\\'sources\\']').click()" style="margin: 0 auto;">Go to Lead Sources</button>
+                </div>
+            `;
+            if (window.feather) window.feather.replace();
+            return;
+        }
+
+        // Fetch forms
+        const forms = await fetchData('/api/meta/forms');
+        if (!forms || forms.length === 0) {
+            container.innerHTML = `
+                <div class="card" style="padding: 40px; text-align: center;">
+                    <div style="font-size: 14px; color: var(--text-muted);">No lead generation forms found for page <strong>${status.pageName}</strong>.</div>
+                </div>
+            `;
+            return;
+        }
+
+        // Render forms table
+        const rows = forms.map(f => {
+            const statusColor = f.status === 'ACTIVE' ? '#10b981' : '#64748b';
+            const statusBg = f.status === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)';
+            return `
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                    <td style="font-weight: 600; color: var(--text-primary); padding: 16px 24px;">${f.name}</td>
+                    <td style="padding: 16px 24px;">${f.pageName}</td>
+                    <td style="padding: 16px 24px;">
+                        <span class="badge" style="background: ${statusBg}; color: ${statusColor}; border: none; padding: 4px 8px; border-radius: 4px; font-weight: 500;">${f.status}</span>
+                    </td>
+                    <td style="padding: 16px 24px;">${f.leadsCount} leads</td>
+                    <td style="padding: 16px 24px; text-align: right;">
+                        <div style="display: flex; gap: 8px; justify-content: flex-end; align-items: center;">
+                            <button class="btn btn-secondary btn-sm" onclick="syncMetaLeadsDirect('${f.id}')" style="gap: 4px; padding: 6px 12px; font-size: 12px;">
+                                <i data-feather="refresh-cw" style="width: 12px; height: 12px;"></i> Sync Leads
+                            </button>
+                            <button class="btn btn-primary btn-sm" onclick="document.querySelector('[data-tab=\\'mapping\\']').click()" style="padding: 6px 12px; font-size: 12px;">
+                                Map Fields
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+        container.innerHTML = `
+            <div class="card" style="overflow: hidden; padding: 0; border-radius: 8px;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-light);">
+                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Form Name</th>
+                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Facebook Page</th>
+                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Status</th>
+                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Sync Stats</th>
+                            <th style="text-align: right; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${rows}
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        if (window.feather) window.feather.replace();
+    };
+
+    window.syncMetaLeadsDirect = async (formId) => {
+        showToast("Starting manual lead sync...", "info");
+        try {
+            const res = await fetchData('/api/meta/sync-leads', { method: 'POST' });
+            if (res && res.success) {
+                showToast(`Synced ${res.count} existing leads from Facebook forms successfully!`);
+                loadLeads();
+                loadFacebookFormsTab();
+            } else {
+                showToast("Failed to sync leads: " + (res ? res.error : "Unknown error"), "error");
+            }
+        } catch (e) {
+            showToast("Sync error: " + e.message, "error");
+        }
     };
 
     window.syncMetaLeads = async () => {

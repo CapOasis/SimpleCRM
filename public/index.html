@@ -756,6 +756,7 @@
             <!-- Integrations Sub-Nav -->
             <div class="sub-nav">
                 <div class="sub-nav-item active" data-tab="sources">Lead Sources</div>
+                <div class="sub-nav-item" data-tab="facebook-forms">Facebook Forms</div>
                 <div class="sub-nav-item" data-tab="mapping">Field Mapping</div>
                 <div class="sub-nav-item" data-tab="messaging">Messaging</div>
             </div>
@@ -1001,6 +1002,22 @@
                             <button class="btn btn-primary btn-sm btn-full"
                                 onclick="openGatewaySettings('whatsapp')">Configure Twilio</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab 4: Facebook Forms -->
+            <div id="tab-facebook-forms" class="tab-content">
+                <div class="section-header" style="margin-bottom: 24px;">
+                    <div class="section-title">
+                        <h2>Facebook Lead Forms</h2>
+                        <p>Manage your active Facebook Lead Generation forms, view page names, and map fields.</p>
+                    </div>
+                </div>
+
+                <div id="meta-forms-container">
+                    <div class="card" style="padding: 40px; text-align: center;">
+                        <div style="font-size: 14px; color: var(--text-muted);">Loading forms...</div>
                     </div>
                 </div>
             </div>
