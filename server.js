@@ -250,7 +250,11 @@ app.get('/api/stages', async (req, res) => {
         // Filter stages belonging to the requested pipeline
         const filtered = (data || []).filter(stage => {
             if (pipeline === firstPipeline) {
-                return !stage.name.includes(':') || stage.name.startsWith(`${firstPipeline}:`);
+                const hasPrefixed = (data || []).some(s => s.name.startsWith(`${firstPipeline}:`));
+                if (hasPrefixed) {
+                    return stage.name.startsWith(`${firstPipeline}:`);
+                }
+                return !stage.name.includes(':');
             } else {
                 return stage.name.startsWith(`${pipeline}:`);
             }
