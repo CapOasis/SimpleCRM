@@ -655,6 +655,25 @@ app.post('/api/leads/remap', async (req, res) => {
 
 // --- META INTEGRATION API ---
 
+const https = require('https');
+
+// Helper to safely execute Facebook Graph API requests and avoid request hangs on parse/network errors
+function getFacebookData(url) {
+    return new Promise((resolve, reject) => {
+        https.get(url, (response) => {
+            let raw = '';
+            response.on('data', chunk => raw += chunk);
+            response.on('end', () => {
+                try {
+                    resolve(JSON.parse(raw));
+                } catch (e) {
+                    reject(new Error(`Failed to parse FB response: ${e.message}. Raw data was: ${raw.substring(0, 200)}`));
+                }
+            });
+        }).on('error', reject);
+    });
+}
+
 // Return public Meta App ID to frontend (safe to expose)
 app.get('/api/meta/app-config', (req, res) => {
     const appId = process.env.META_APP_ID;
@@ -669,42 +688,27 @@ app.post('/api/meta/pages', async (req, res) => {
     const { userToken } = req.body;
     if (!userToken) return res.status(400).json({ error: 'userToken required' });
 
-    const https = require('https');
-    const getUrl = (url) => new Promise((resolve, reject) => {
-        https.get(url, (response) => {
-            let raw = '';
-            response.on('data', chunk => raw += chunk);
-            response.on('end', () => {
-                try {
-                    resolve(JSON.parse(raw));
-                } catch (e) {
-                    reject(e);
-                }
-            });
-        }).on('error', reject);
-    });
-
     try {
         // 1. Get pages directly owned/managed by the user
-        const directPagesData = await getUrl(`https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+        const directPagesData = await getFacebookData(`https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
         if (directPagesData.error) return res.status(400).json({ error: directPagesData.error.message });
         
         let allPages = directPagesData.data || [];
 
         // 2. Fetch businesses (if business_management permission is granted)
         try {
-            const businessesData = await getUrl(`https://graph.facebook.com/v19.0/me/businesses?access_token=${userToken}&limit=100`);
+            const businessesData = await getFacebookData(`https://graph.facebook.com/v19.0/me/businesses?access_token=${userToken}&limit=100`);
             const businesses = businessesData.data || [];
 
             for (const biz of businesses) {
                 // Fetch owned pages
-                const ownedData = await getUrl(`https://graph.facebook.com/v19.0/${biz.id}/owned_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+                const ownedData = await getFacebookData(`https://graph.facebook.com/v19.0/${biz.id}/owned_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
                 if (ownedData && ownedData.data) {
                     allPages = allPages.concat(ownedData.data);
                 }
 
                 // Fetch client pages (shared pages)
-                const clientData = await getUrl(`https://graph.facebook.com/v19.0/${biz.id}/client_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+                const clientData = await getFacebookData(`https://graph.facebook.com/v19.0/${biz.id}/client_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
                 if (clientData && clientData.data) {
                     allPages = allPages.concat(clientData.data);
                 }
@@ -735,16 +739,8 @@ app.post('/api/meta/adaccounts', async (req, res) => {
     if (!userToken) return res.status(400).json({ error: 'userToken required' });
 
     try {
-        const https = require('https');
         const url = `https://graph.facebook.com/v19.0/me/adaccounts?access_token=${userToken}&fields=id,name,account_status`;
-
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (response) => {
-                let raw = '';
-                response.on('data', chunk => raw += chunk);
-                response.on('end', () => resolve(JSON.parse(raw)));
-            }).on('error', reject);
-        });
+        const data = await getFacebookData(url);
 
         if (data.error) return res.status(400).json({ error: data.error.message });
         res.json({ success: true, adaccounts: data.data || [] });
@@ -814,16 +810,8 @@ app.get('/api/meta/campaigns', async (req, res) => {
             return res.json([]);
         }
 
-        const https = require('https');
         const url = `https://graph.facebook.com/v19.0/${adAccountId}/campaigns?access_token=${userToken}&fields=id,name,status,objective&limit=50`;
-
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (response) => {
-                let raw = '';
-                response.on('data', chunk => raw += chunk);
-                response.on('end', () => resolve(JSON.parse(raw)));
-            }).on('error', reject);
-        });
+        const data = await getFacebookData(url);
 
         if (data.error) {
             console.error('[Meta Campaigns Error]', data.error);
@@ -852,16 +840,8 @@ app.get('/api/meta/forms', async (req, res) => {
             return res.json([]);
         }
 
-        const https = require('https');
         const url = `https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name,status,leads_count&limit=100`;
-
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (response) => {
-                let raw = '';
-                response.on('data', chunk => raw += chunk);
-                response.on('end', () => resolve(JSON.parse(raw)));
-            }).on('error', reject);
-        });
+        const data = await getFacebookData(url);
 
         if (data.error) {
             console.error('[Meta Forms Error]', data.error);
@@ -897,18 +877,9 @@ app.post('/api/meta/sync-leads', async (req, res) => {
             return res.status(400).json({ error: 'Meta integration is not connected.' });
         }
 
-        const https = require('https');
-        const getUrl = (url) => new Promise((resolve, reject) => {
-            https.get(url, (response) => {
-                let raw = '';
-                response.on('data', chunk => raw += chunk);
-                response.on('end', () => resolve(JSON.parse(raw)));
-            }).on('error', reject);
-        });
-
         // 1. Fetch all Lead Forms for the Page
         console.log(`[Sync] Fetching forms for page: ${pageId}`);
-        const formsData = await getUrl(`https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name`);
+        const formsData = await getFacebookData(`https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name`);
         if (formsData.error) {
             console.error('[Sync] Forms Fetch Error:', formsData.error);
             throw new Error(formsData.error.message);
