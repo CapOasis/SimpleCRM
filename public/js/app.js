@@ -2584,7 +2584,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('User cancelled login or did not fully authorize.');
                 }
             }, {
-                scope: 'pages_show_list,pages_read_engagement,pages_manage_ads,leads_retrieval',
+                scope: 'pages_show_list,pages_read_engagement,pages_manage_ads,leads_retrieval,business_management',
                 auth_type: 'rerequest' // Important to ask again for permissions if they were skipped
             });
         });
@@ -2775,7 +2775,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     console.log('User cancelled login or did not fully authorize.');
                 }
             }, {
-                scope: 'pages_show_list,pages_read_engagement,pages_manage_ads,leads_retrieval,ads_management',
+                scope: 'pages_show_list,pages_read_engagement,pages_manage_ads,leads_retrieval,ads_management,business_management',
                 auth_type: 'rerequest'
             });
         });
@@ -2839,23 +2839,39 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (result && result.success && result.adaccounts) {
-            const activeAccounts = result.adaccounts.filter(acc => acc.account_status === 1); // 1 = Active
-            const displayAccounts = activeAccounts.length > 0 ? activeAccounts : result.adaccounts;
+            const displayAccounts = result.adaccounts;
 
             if (displayAccounts.length === 0) {
                 listContainer.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text-muted);">No ad accounts found.</div>';
                 return;
             }
 
-            listContainer.innerHTML = displayAccounts.map(acc => `
-                <div class="card selection-card" style="margin-bottom: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; min-height: 64px;">
-                    <div style="flex: 1; text-align: left; min-width: 0;">
-                        <div style="font-weight:600; color:var(--text-primary); font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${acc.name}</div>
-                        <div style="font-size:11px; color:var(--text-muted);">ID: ${acc.id}</div>
+            const statusNames = {
+                1: 'Active',
+                2: 'Disabled',
+                3: 'Unpaid Bills',
+                7: 'Pending Risk Review',
+                9: 'In Grace Period',
+                100: 'Pending Settlement',
+                101: 'Pending System Decision',
+                102: 'Pending Settlement'
+            };
+
+            listContainer.innerHTML = displayAccounts.map(acc => {
+                const statusLabel = statusNames[acc.account_status] || `Status ${acc.account_status}`;
+                const statusBadge = acc.account_status !== 1 
+                    ? ` | <span style="color:#ef4444; font-weight: 500;">(${statusLabel})</span>` 
+                    : '';
+                return `
+                    <div class="card selection-card" style="margin-bottom: 8px; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-shrink: 0; min-height: 64px;">
+                        <div style="flex: 1; text-align: left; min-width: 0;">
+                            <div style="font-weight:600; color:var(--text-primary); font-size:14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${acc.name}</div>
+                            <div style="font-size:11px; color:var(--text-muted);">ID: ${acc.id}${statusBadge}</div>
+                        </div>
+                        <button class="btn btn-primary btn-sm" onclick="selectMetaQuickAdAccount('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')">Link</button>
                     </div>
-                    <button class="btn btn-primary btn-sm" onclick="selectMetaQuickAdAccount('${acc.id}', '${acc.name.replace(/'/g, "\\'")}')">Link</button>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         } else {
             listContainer.innerHTML = `<div style="color:#ef4444; text-align:center; padding:20px;">Error: ${result ? result.error : 'Failed to retrieve ad accounts'}</div>`;
         }
