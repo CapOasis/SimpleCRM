@@ -85,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let leadsLimit = 20;
     let totalLeads = 0;
 
-    let currentPipeline = 'Default Pipeline';
+    let currentPipeline = 'SaladO';
 
     // --- Backend API Sync Logic ---
 
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (pipelines) {
             const originalVal = select.value || currentPipeline;
             select.innerHTML = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
-            currentPipeline = select.value || 'Default Pipeline';
+            currentPipeline = select.value || 'SaladO';
         }
     }
 
@@ -2817,12 +2817,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const pipelinesList = pipelines || ['Default Pipeline'];
+        const pipelinesList = pipelines || ['SaladO'];
         const mappingsDict = mappings || {};
 
         // Render forms table
         const rows = forms.map(f => {
-            const currentMappedPipeline = mappingsDict[f.id] || 'Default Pipeline';
+            const currentMappedPipeline = mappingsDict[f.id] || 'SaladO';
             const pipelineOptions = pipelinesList.map(p => `
                 <option value="${p}" ${p === currentMappedPipeline ? 'selected' : ''}>${p}</option>
             `).join('');

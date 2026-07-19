@@ -19,14 +19,21 @@ app.get('/api/leads', async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const from = (page - 1) * limit;
     const to = from + limit - 1;
-    const pipeline = req.query.pipeline || 'Default Pipeline';
 
     try {
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['SaladO'];
+        if (settingsData && settingsData.value) {
+            try { pipelines = JSON.parse(settingsData.value); } catch (e) {}
+        }
+        const firstPipeline = pipelines[0] || 'SaladO';
+        const pipeline = req.query.pipeline || firstPipeline;
+
         // Fetch stages for this pipeline
         const { data: stagesData } = await db.from('stages').select('name');
         const stageNames = (stagesData || []).map(s => s.name).filter(name => {
-            if (pipeline === 'Default Pipeline') {
-                return !name.includes(':') || name.startsWith('Default Pipeline:');
+            if (pipeline === firstPipeline) {
+                return !name.includes(':') || name.startsWith(`${firstPipeline}:`);
             } else {
                 return name.startsWith(`${pipeline}:`);
             }
@@ -49,12 +56,19 @@ app.get('/api/leads', async (req, res) => {
 
 // Get total leads count for pagination
 app.get('/api/leads/count', async (req, res) => {
-    const pipeline = req.query.pipeline || 'Default Pipeline';
     try {
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['SaladO'];
+        if (settingsData && settingsData.value) {
+            try { pipelines = JSON.parse(settingsData.value); } catch (e) {}
+        }
+        const firstPipeline = pipelines[0] || 'SaladO';
+        const pipeline = req.query.pipeline || firstPipeline;
+
         const { data: stagesData } = await db.from('stages').select('name');
         const stageNames = (stagesData || []).map(s => s.name).filter(name => {
-            if (pipeline === 'Default Pipeline') {
-                return !name.includes(':') || name.startsWith('Default Pipeline:');
+            if (pipeline === firstPipeline) {
+                return !name.includes(':') || name.startsWith(`${firstPipeline}:`);
             } else {
                 return name.startsWith(`${pipeline}:`);
             }
@@ -217,8 +231,15 @@ app.delete('/api/leads', async (req, res) => {
 // --- FLOWS (STAGES) API ---
 
 app.get('/api/stages', async (req, res) => {
-    const pipeline = req.query.pipeline || 'Default Pipeline';
     try {
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['SaladO'];
+        if (settingsData && settingsData.value) {
+            try { pipelines = JSON.parse(settingsData.value); } catch (e) {}
+        }
+        const firstPipeline = pipelines[0] || 'SaladO';
+        const pipeline = req.query.pipeline || firstPipeline;
+
         const { data, error } = await db
             .from('stages')
             .select('*')
@@ -228,8 +249,8 @@ app.get('/api/stages', async (req, res) => {
 
         // Filter stages belonging to the requested pipeline
         const filtered = (data || []).filter(stage => {
-            if (pipeline === 'Default Pipeline') {
-                return !stage.name.includes(':') || stage.name.startsWith('Default Pipeline:');
+            if (pipeline === firstPipeline) {
+                return !stage.name.includes(':') || stage.name.startsWith(`${firstPipeline}:`);
             } else {
                 return stage.name.startsWith(`${pipeline}:`);
             }
@@ -697,7 +718,7 @@ app.post('/api/leads/remap', async (req, res) => {
 app.get('/api/pipelines', async (req, res) => {
     try {
         const { data, error } = await db.from('settings').select('*').eq('key', 'pipelines').single();
-        let pipelines = ['Default Pipeline'];
+        let pipelines = ['SaladO'];
         if (data && data.value) {
             try {
                 pipelines = JSON.parse(data.value);
@@ -705,7 +726,7 @@ app.get('/api/pipelines', async (req, res) => {
         }
         res.json(pipelines);
     } catch (err) {
-        res.json(['Default Pipeline']);
+        res.json(['SaladO']);
     }
 });
 
@@ -721,7 +742,7 @@ app.post('/api/pipelines', async (req, res) => {
 
     try {
         const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
-        let pipelines = ['Default Pipeline'];
+        let pipelines = ['SaladO'];
         if (settingsData && settingsData.value) {
             try {
                 pipelines = JSON.parse(settingsData.value);
