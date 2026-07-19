@@ -669,20 +669,61 @@ app.post('/api/meta/pages', async (req, res) => {
     const { userToken } = req.body;
     if (!userToken) return res.status(400).json({ error: 'userToken required' });
 
+    const https = require('https');
+    const getUrl = (url) => new Promise((resolve, reject) => {
+        https.get(url, (response) => {
+            let raw = '';
+            response.on('data', chunk => raw += chunk);
+            response.on('end', () => {
+                try {
+                    resolve(JSON.parse(raw));
+                } catch (e) {
+                    reject(e);
+                }
+            });
+        }).on('error', reject);
+    });
+
     try {
-        const https = require('https');
-        const url = `https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}&fields=id,name,category,access_token`;
+        // 1. Get pages directly owned/managed by the user
+        const directPagesData = await getUrl(`https://graph.facebook.com/v19.0/me/accounts?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+        if (directPagesData.error) return res.status(400).json({ error: directPagesData.error.message });
+        
+        let allPages = directPagesData.data || [];
 
-        const data = await new Promise((resolve, reject) => {
-            https.get(url, (response) => {
-                let raw = '';
-                response.on('data', chunk => raw += chunk);
-                response.on('end', () => resolve(JSON.parse(raw)));
-            }).on('error', reject);
-        });
+        // 2. Fetch businesses (if business_management permission is granted)
+        try {
+            const businessesData = await getUrl(`https://graph.facebook.com/v19.0/me/businesses?access_token=${userToken}&limit=100`);
+            const businesses = businessesData.data || [];
 
-        if (data.error) return res.status(400).json({ error: data.error.message });
-        res.json({ success: true, pages: data.data || [] });
+            for (const biz of businesses) {
+                // Fetch owned pages
+                const ownedData = await getUrl(`https://graph.facebook.com/v19.0/${biz.id}/owned_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+                if (ownedData && ownedData.data) {
+                    allPages = allPages.concat(ownedData.data);
+                }
+
+                // Fetch client pages (shared pages)
+                const clientData = await getUrl(`https://graph.facebook.com/v19.0/${biz.id}/client_pages?access_token=${userToken}&fields=id,name,category,access_token&limit=100`);
+                if (clientData && clientData.data) {
+                    allPages = allPages.concat(clientData.data);
+                }
+            }
+        } catch (bizErr) {
+            console.warn('[Meta Pages] Failed to fetch business pages (might lack business_management permission):', bizErr.message);
+        }
+
+        // 3. Remove duplicates based on Page ID
+        const uniquePages = [];
+        const seenIds = new Set();
+        for (const p of allPages) {
+            if (p && p.id && !seenIds.has(p.id)) {
+                seenIds.add(p.id);
+                uniquePages.push(p);
+            }
+        }
+
+        res.json({ success: true, pages: uniquePages });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
