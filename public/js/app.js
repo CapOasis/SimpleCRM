@@ -363,178 +363,69 @@ document.addEventListener('DOMContentLoaded', () => {
     let mappingGroups = {};
 
     function initMappingSortables() {
-        const pillBank = document.getElementById('pillBank');
-        const slots = ['slot-name', 'slot-email', 'slot-phone'];
-
-        if (!pillBank) return;
-
-        // The Pill Bank (Source)
-        mappingGroups.bank = new Sortable(pillBank, {
-            group: 'mapping',
-            animation: 150,
-            ghostClass: 'sortable-ghost'
-        });
-
-        // The Target Slots
-        slots.forEach(id => {
-            const el = document.getElementById(id);
-            if (el) {
-                new Sortable(el, {
-                    group: 'mapping',
-                    animation: 150,
-                    ghostClass: 'sortable-ghost',
-                    onAdd: (evt) => {
-                        // If slot already has a pill, move the old one back to the bank
-                        if (el.children.length > 2) {
-                            const oldPill = Array.from(el.children).find(c => c !== evt.item && c.classList.contains('mapping-pill'));
-                            if (oldPill) pillBank.appendChild(oldPill);
-                        }
-                        updateMappingPreview();
-                    },
-                    onRemove: () => {
-                        updateMappingPreview();
-                    }
-                });
-            }
-        });
+        // Disabled: drag and drop replaced by table dropdown mapping
     }
 
     window.refreshMappingSchema = async () => {
         const schema = await fetchData('/api/leads/schema');
-        
-        // Use a quiet try/catch or custom fetch handling for /api/leads/latest to suppress 404 console alerts on empty DB
-        let latest = null;
-        try {
-            const res = await fetch('/api/leads/latest');
-            if (res.ok) {
-                latest = await res.json();
+        const settings = await fetchData('/api/settings') || {};
+
+        const nameSel = document.getElementById('mapSelectName');
+        const emailSel = document.getElementById('mapSelectEmail');
+        const phoneSel = document.getElementById('mapSelectPhone');
+
+        if (!nameSel || !emailSel || !phoneSel) return;
+
+        const columns = (schema && schema.keys) || [];
+
+        // Helper to populate select
+        const populateSelect = (selectEl, selectedValue, defaultFallback) => {
+            const options = columns.map(col => `
+                <option value="${col}" ${col === selectedValue ? 'selected' : ''}>${col.replace(/_/g, ' ')}</option>
+            `);
+            // Add a default fallback if not already in options
+            if (defaultFallback && !columns.includes(defaultFallback)) {
+                options.unshift(`<option value="${defaultFallback}" selected>${defaultFallback.replace(/_/g, ' ')}</option>`);
             }
-        } catch (e) {
-            // Suppress error quietly
-        }
+            selectEl.innerHTML = options.join('');
+        };
 
-        if (schema && schema.keys) {
-            const bank = document.getElementById('pillBank');
-            bank.innerHTML = '';
-
-            const mappedKeys = Array.from(document.querySelectorAll('.mapping-targets .mapping-pill')).map(p => p.getAttribute('data-key'));
-
-            schema.keys.filter(k => !mappedKeys.includes(k)).forEach(key => {
-                const pill = document.createElement('div');
-                pill.className = 'mapping-pill';
-                // Replace underscores with spaces for readability
-                pill.textContent = key.replace(/_/g, ' ');
-                pill.setAttribute('data-key', key);
-                bank.appendChild(pill);
-            });
-        }
-
-        if (latest) {
-            latestLeadPreview = latest;
-            updateMappingPreview();
-        }
+        populateSelect(nameSel, settings.mapping_name, 'full_name');
+        populateSelect(emailSel, settings.mapping_email, 'email');
+        populateSelect(phoneSel, settings.mapping_phone, 'phone_number');
     };
 
-    function updateMappingPreview() {
-        if (!latestLeadPreview) return;
+    window.saveTableMapping = async () => {
+        const nameSel = document.getElementById('mapSelectName');
+        const emailSel = document.getElementById('mapSelectEmail');
+        const phoneSel = document.getElementById('mapSelectPhone');
 
-        const mapping = {
-            name: document.querySelector('#slot-name .mapping-pill')?.getAttribute('data-key'),
-            email: document.querySelector('#slot-email .mapping-pill')?.getAttribute('data-key'),
-            phone: document.querySelector('#slot-phone .mapping-pill')?.getAttribute('data-key')
+        if (!nameSel || !emailSel || !phoneSel) return;
+
+        const body = {
+            mapping_name: nameSel.value,
+            mapping_email: emailSel.value,
+            mapping_phone: phoneSel.value
         };
 
-        const raw = latestLeadPreview.raw || {};
-
-        const finalName = mapping.name ? (raw[mapping.name] || 'N/A') : 'Not Mapped';
-        const finalEmail = mapping.email ? (raw[mapping.email] || 'N/A') : 'Not Mapped';
-        const finalPhone = mapping.phone ? (raw[mapping.phone] || 'N/A') : 'Not Mapped';
-
-        // Update technical labels in slot descriptions
-        document.getElementById('preview-name').textContent = mapping.name || '-';
-        document.getElementById('preview-email').textContent = mapping.email || '-';
-        document.getElementById('preview-phone').textContent = mapping.phone || '-';
-
-        // Update Horizontal Strip Preview
-        const nameHeader = document.getElementById('preview-name-header');
-        const emailHeader = document.getElementById('preview-email-header');
-        const phoneHeader = document.getElementById('preview-phone-header');
-        const sourceBadge = document.getElementById('preview-source-badge');
-        const avatar = document.getElementById('preview-avatar');
-
-        nameHeader.textContent = finalName;
-        emailHeader.textContent = finalEmail;
-        phoneHeader.textContent = finalPhone;
-
-        if (mapping.name && raw[mapping.name]) {
-            avatar.textContent = raw[mapping.name].charAt(0).toUpperCase();
-            avatar.style.background = 'var(--text-primary)';
-        } else {
-            avatar.textContent = '?';
-            avatar.style.background = '#94a3b8';
-        }
-
-        sourceBadge.textContent = latestLeadPreview.source || 'Direct Sync';
-
-        ['name', 'email', 'phone'].forEach(field => {
-            const slot = document.getElementById(`slot-${field}`);
-            const placeholder = slot.querySelector('.slot-placeholder');
-            const hasPill = slot.querySelector('.mapping-pill');
-            if (placeholder) placeholder.style.display = hasPill ? 'none' : 'block';
-        });
-    }
-
-    window.saveVisualMapping = async () => {
-        const mapping = {
-            name: document.querySelector('#slot-name .mapping-pill')?.getAttribute('data-key'),
-            email: document.querySelector('#slot-email .mapping-pill')?.getAttribute('data-key'),
-            phone: document.querySelector('#slot-phone .mapping-pill')?.getAttribute('data-key')
-        };
-
-        // 1. Save preferences
-        const saveResult = await fetchData('/api/settings', {
+        const res = await fetchData('/api/settings', {
             method: 'POST',
-            body: JSON.stringify({
-                mapping_name: mapping.name || 'name',
-                mapping_email: mapping.email || 'email',
-                mapping_phone: mapping.phone || 'phone'
-            })
+            body: JSON.stringify(body)
         });
 
-        if (saveResult) {
-            // 2. Trigger retroactive re-mapping
+        if (res) {
+            // Retroactive re-mapping
             const remapResult = await fetchData('/api/leads/remap', { method: 'POST' });
-
             if (remapResult) {
-                alert(`Mapping Saved! Updated ${remapResult.count} existing leads.`);
-                // 3. Refresh UI
-                loadLeads(); // Refresh table
-                refreshMappingSchema(); // Refresh preview strip
+                showToast(`Mapping saved! Updated ${remapResult.count} existing leads.`);
+                loadLeads();
             }
         }
     };
 
     async function loadFieldMappings() {
-        const settings = await fetchData('/api/settings');
-        if (settings) {
-            setTimeout(() => {
-                const mappingKeys = {
-                    name: settings.mapping_name,
-                    email: settings.mapping_email,
-                    phone: settings.mapping_phone
-                };
-
-                Object.keys(mappingKeys).forEach(field => {
-                    const key = mappingKeys[field];
-                    if (key) {
-                        const pill = Array.from(document.querySelectorAll('.mapping-pill')).find(p => p.getAttribute('data-key') === key);
-                        const slot = document.getElementById(`slot-${field}`);
-                        if (pill && slot) slot.appendChild(pill);
-                    }
-                });
-                updateMappingPreview();
-            }, 500);
-        }
+        // Mappings loaded dynamically via refreshMappingSchema
+        await refreshMappingSchema();
     }
 
 
@@ -2059,18 +1950,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (lead.custom_data) {
             try {
-                const customData = JSON.parse(lead.custom_data);
+                const customData = typeof lead.custom_data === 'string' ? JSON.parse(lead.custom_data) : lead.custom_data;
                 const keys = Object.keys(customData);
                 if (keys.length > 0) {
                     customDataSection.style.display = 'block';
                     customDataFields.innerHTML = keys.map(k => `
-                        <div style="background: var(--bg-main); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color); font-size: 13px; word-break: break-word;">
-                            <span style="color: var(--text-secondary); display: block; font-size: 11px; margin-bottom: 2px;">${k}</span>
-                            <span style="color: var(--text-primary); font-family: monospace;">${customData[k] || '-'}</span>
+                        <div style="background: var(--bg-main); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color); font-size: 13px; word-break: break-word; display: flex; flex-direction: column; gap: 4px;">
+                            <span style="color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">${k.replace(/_/g, ' ')}</span>
+                            <span style="color: var(--text-primary); font-size: 14px; font-weight: 500;">${customData[k] || '-'}</span>
                         </div>
                     `).join('');
                 } else { customDataSection.style.display = 'none'; }
-            } catch (e) { customDataSection.style.display = 'none'; }
+            } catch (e) {
+                console.error('[Drawer Custom Data Error]', e);
+                customDataSection.style.display = 'none';
+            }
         } else { customDataSection.style.display = 'none'; }
 
         // Load timeline

@@ -874,99 +874,54 @@
                 <div class="section-header" style="margin-bottom: 24px;">
                     <div class="section-title">
                         <h2>Lead Field Mapping</h2>
-                        <p>Drag columns from your last sync into the CRM fields. All other columns are saved as
-                            Custom Data.</p>
+                        <p>Map your Facebook Lead Form columns to CRM fields. Starred fields are required. All other columns are automatically saved under Custom Data.</p>
                     </div>
                     <button class="btn btn-secondary btn-sm mapping-refresh-btn" onclick="refreshMappingSchema()">
-                        <i data-feather="refresh-cw" style="width: 14px; margin-right: 6px;"></i> Refresh Discovered
-                        Columns
+                        <i data-feather="refresh-cw" style="width: 14px; margin-right: 6px;"></i> Refresh Discovered Columns
                     </button>
                 </div>
 
-                <div class="mapping-container">
-                    <!-- Top: Horizontal Preview Strip -->
-                    <div class="mapping-preview-strip">
-                        <div class="preview-strip-label">Preview</div>
-                        <div class="preview-strip-content">
-                            <div class="preview-plate">
-                                <div id="preview-avatar" class="avatar">?</div>
-                                <div class="preview-info">
-                                    <h4 id="preview-name-header">Mapping Preview</h4>
-                                    <p id="preview-phone-header">Phone Label</p>
-                                </div>
-                            </div>
-                            <div class="preview-meta">
-                                <div id="preview-email-header" style="font-size: 13px; font-weight: 500;">Email
-                                    Label</div>
-                                <p style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">Contact
-                                    Information</p>
-                            </div>
-                            <div style="flex: 1;">
-                                <div id="preview-source-badge" class="preview-source-badge">No Source</div>
-                            </div>
-                            <div class="preview-status"></div>
-                            <button class="btn btn-secondary btn-sm"
-                                style="padding: 6px 12px; font-size: 11px; opacity: 0.6;" disabled>View</button>
-                        </div>
-                    </div>
+                <div class="card" style="padding: 24px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card);">
+                    <table style="width: 100%; border-collapse: collapse; margin-bottom: 24px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-light);">
+                                <th style="text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">CRM Field</th>
+                                <th style="text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Facebook Form Column</th>
+                                <th style="text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color); width: 80px;">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 16px; font-weight: 600; color: var(--text-primary);">Full Name <span style="color:#ef4444;">*</span></td>
+                                <td style="padding: 16px;">
+                                    <select id="mapSelectName" style="width: 100%; max-width: 320px; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);"></select>
+                                </td>
+                                <td style="padding: 16px;"><span class="badge" style="background: rgba(16,185,129,0.1); color: #10b981; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Active</span></td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 16px; font-weight: 600; color: var(--text-primary);">Email Address <span style="color:#ef4444;">*</span></td>
+                                <td style="padding: 16px;">
+                                    <select id="mapSelectEmail" style="width: 100%; max-width: 320px; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);"></select>
+                                </td>
+                                <td style="padding: 16px;"><span class="badge" style="background: rgba(16,185,129,0.1); color: #10b981; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Active</span></td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid var(--border-color);">
+                                <td style="padding: 16px; font-weight: 600; color: var(--text-primary);">Phone Number <span style="color:#ef4444;">*</span></td>
+                                <td style="padding: 16px;">
+                                    <select id="mapSelectPhone" style="width: 100%; max-width: 320px; height: 36px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-primary);"></select>
+                                </td>
+                                <td style="padding: 16px;"><span class="badge" style="background: rgba(16,185,129,0.1); color: #10b981; border:none; padding:4px 8px; border-radius:4px; font-size:11px;">Active</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
 
-                    <!-- Bottom: Dual Columns -->
-                    <div class="mapping-dual-columns">
-                        <!-- Source: Your Sheet Columns -->
-                        <div class="mapping-source-bank">
-                            <div class="mapping-bank-title">Discovered Columns</div>
-                            <div id="pillBank" class="pill-list">
-                                <div class="slot-placeholder">Sync a lead...</div>
-                            </div>
-                        </div>
-
-                        <!-- Target: CRM Fields -->
-                        <div class="mapping-targets">
-                            <div class="mapping-slot">
-                                <div class="slot-icon"><i data-feather="user"></i></div>
-                                <div class="slot-label">
-                                    <h4>Full Name</h4>
-                                    <p>Mapping to: <span id="preview-name"
-                                            style="color: var(--text-secondary); font-weight: 500;">-</span></p>
-                                </div>
-                                <div id="slot-name" class="slot-target" data-field="name">
-                                    <div class="slot-placeholder">Drop column</div>
-                                </div>
-                            </div>
-
-                            <div class="mapping-slot">
-                                <div class="slot-icon"><i data-feather="mail"></i></div>
-                                <div class="slot-label">
-                                    <h4>Email Address</h4>
-                                    <p>Mapping to: <span id="preview-email"
-                                            style="color: var(--text-secondary); font-weight: 500;">-</span></p>
-                                </div>
-                                <div id="slot-email" class="slot-target" data-field="email">
-                                    <div class="slot-placeholder">Drop column</div>
-                                </div>
-                            </div>
-
-                            <div class="mapping-slot">
-                                <div class="slot-icon"><i data-feather="phone"></i></div>
-                                <div class="slot-label">
-                                    <h4>Phone Number</h4>
-                                    <p>Mapping to: <span id="preview-phone"
-                                            style="color: var(--text-secondary); font-weight: 500;">-</span></p>
-                                </div>
-                                <div id="slot-phone" class="slot-target" data-field="phone">
-                                    <div class="slot-placeholder">Drop column</div>
-                                </div>
-                            </div>
-
-                            <div style="display: flex; gap: 12px; margin-top: 12px;">
-                                <button class="btn btn-primary btn-full" onclick="saveVisualMapping()">Save Mapping
-                                    Preferences</button>
-                                <button class="btn btn-secondary" onclick="confirmResetLeads()"
-                                    style="color: #ef4444; border-color: #fee2e2;">
-                                    <i data-feather="trash-2" style="width: 14px;"></i>
-                                </button>
-                            </div>
-                        </div>
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="confirmResetLeads()" style="color: #ef4444; border-color: #fee2e2; display: inline-flex; align-items: center; gap: 6px;">
+                            <i data-feather="trash-2" style="width: 14px; height: 14px;"></i> Clear All Leads
+                        </button>
+                        <button class="btn btn-primary" onclick="saveTableMapping()">
+                            Save Mapping Preferences
+                        </button>
                     </div>
                 </div>
             </div>
