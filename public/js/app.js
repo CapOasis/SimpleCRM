@@ -173,14 +173,17 @@ document.addEventListener('DOMContentLoaded', () => {
         const select = document.getElementById('activePipelineSelect');
         if (!select) return;
 
+        const deleteBtn = document.getElementById('deletePipelineBtn');
         const pipelines = await fetchData('/api/pipelines') || [];
         if (pipelines.length === 0) {
             select.innerHTML = `<option value="">No pipeline created</option>`;
             select.disabled = true;
+            if (deleteBtn) deleteBtn.style.display = 'none';
             currentPipeline = '';
             localStorage.removeItem('crm_active_pipeline');
         } else {
             select.disabled = false;
+            if (deleteBtn) deleteBtn.style.display = 'inline-flex';
             const savedPipeline = localStorage.getItem('crm_active_pipeline');
             const originalVal = pipelines.includes(savedPipeline) ? savedPipeline : pipelines[0];
             select.innerHTML = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
@@ -256,6 +259,30 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadLeads();
         } else {
             showToast(res ? res.error : "Failed to create pipeline", "error");
+        }
+    };
+
+    window.deleteActivePipeline = async () => {
+        if (!currentPipeline) return;
+        if (!confirm(`Are you sure you want to delete the pipeline "${currentPipeline}"? This will delete all of its stages.`)) {
+            return;
+        }
+
+        const res = await fetchData('/api/pipelines', {
+            method: 'DELETE',
+            body: JSON.stringify({ name: currentPipeline })
+        });
+
+        if (res && res.success) {
+            showToast(`Pipeline deleted successfully!`);
+            localStorage.removeItem('crm_active_pipeline');
+            currentPipeline = '';
+            
+            await loadPipelines();
+            await loadStages();
+            await loadLeads();
+        } else {
+            showToast(res ? res.error : "Failed to delete pipeline", "error");
         }
     };
 

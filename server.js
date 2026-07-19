@@ -776,6 +776,31 @@ app.post('/api/pipelines', async (req, res) => {
     }
 });
 
+app.delete('/api/pipelines', async (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Pipeline name is required' });
+
+    try {
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = [];
+        if (settingsData && settingsData.value) {
+            try {
+                pipelines = JSON.parse(settingsData.value);
+            } catch (e) {}
+        }
+
+        pipelines = pipelines.filter(p => p !== name);
+        await db.from('settings').upsert({ key: 'pipelines', value: JSON.stringify(pipelines) }, { onConflict: 'key' });
+
+        // Delete stages for this pipeline
+        await db.from('stages').delete().like('name', `${name}:%`);
+
+        res.json({ success: true, pipelines });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 app.get('/api/pipelines/mappings', async (req, res) => {
     try {
         const { data } = await db.from('settings').select('*').eq('key', 'form_pipeline_mappings').single();
