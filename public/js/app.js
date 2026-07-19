@@ -106,6 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLeads() {
         const tbody = document.getElementById('leads-table-body');
+        const boardContainer = document.getElementById('leads-board-view');
+
         if (!currentPipeline) {
             if (tbody) {
                 tbody.innerHTML = `
@@ -119,7 +121,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     </tr>
                 `;
             }
-            const boardContainer = document.getElementById('leads-board-view');
             if (boardContainer) {
                 boardContainer.innerHTML = `
                     <div style="text-align:center; padding:80px; width:100%;">
@@ -132,6 +133,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (window.feather) window.feather.replace();
             return;
+        }
+
+        // Show table loader
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align:center; padding:60px;">
+                        <div class="loader-spinner" style="display:inline-block; width:28px; height:28px; border:3px solid #e2e8f0; border-radius:50%; border-top-color:var(--primary-color); animation:spin 1s linear infinite; margin-bottom:12px;"></div>
+                        <p style="font-size:13px; color:#7a8292; font-weight:400; margin:0;">Loading leads...</p>
+                    </td>
+                </tr>
+            `;
+        }
+        // Show board loader
+        if (boardContainer) {
+            boardContainer.innerHTML = `
+                <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; width:100%; height:300px;">
+                    <div class="loader-spinner" style="display:inline-block; width:36px; height:36px; border:3px solid #e2e8f0; border-radius:50%; border-top-color:var(--primary-color); animation:spin 1s linear infinite; margin-bottom:12px;"></div>
+                    <p style="font-size:13px; color:#7a8292; font-weight:400; margin:0;">Loading kanban board...</p>
+                </div>
+            `;
         }
 
         const countData = await fetchData(`/api/leads/count?pipeline=${encodeURIComponent(currentPipeline)}`);
