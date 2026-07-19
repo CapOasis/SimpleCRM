@@ -779,24 +779,14 @@
 
             <!-- Integrations Sub-Nav -->
             <div class="sub-nav">
-                <div class="sub-nav-item active" data-tab="sources">Lead Sources</div>
-                <div class="sub-nav-item" data-tab="facebook-forms">Facebook Forms</div>
-                <div class="sub-nav-item" data-tab="mapping">Field Mapping</div>
-                <div class="sub-nav-item" data-tab="messaging">Messaging</div>
+                <div class="sub-nav-item active" data-tab="sources">Lead Sources <span class="info-btn" data-tooltip-multiline="Manage your active Facebook Lead Generation forms, view page names, and map fields." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
+                <div class="sub-nav-item" data-tab="facebook-forms">Facebook Forms <span class="info-btn" data-tooltip-multiline="View all active Facebook Lead Ad forms connected to your Meta account and their sync status." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
+                <div class="sub-nav-item" data-tab="mapping">Field Mapping <span class="info-btn" data-tooltip-multiline="Map your Facebook Lead Form columns to CRM fields. Starred fields are required. All other columns are automatically saved under Custom Data." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
+                <div class="sub-nav-item" data-tab="messaging">Messaging <span class="info-btn" data-tooltip-multiline="Configure automated WhatsApp and email message templates sent to leads at each stage." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
             </div>
 
             <!-- Tab 1: Lead Sources -->
             <div id="tab-sources" class="tab-content active">
-                <div class="section-header" style="margin-bottom: 24px;">
-                    <div class="section-title">
-                        <h2 style="display: inline-flex; align-items: center; gap: 8px; margin: 0;">
-                            Lead Sources
-                            <span class="info-btn" data-tooltip-multiline="Manage your active Facebook Lead Generation forms, view page names, and map fields." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                                <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                            </span>
-                        </h2>
-                    </div>
-                </div>
                 <div class="automations-grid">
                     <!-- Meta Integration Card -->
                     <div class="card automation-card" id="metaIntegrationCard">
@@ -893,22 +883,12 @@
 
             <!-- Tab 2: Field Mapping -->
             <div id="tab-mapping" class="tab-content">
-                <div class="section-header" style="margin-bottom: 24px;">
-                    <div class="section-title">
-                        <h2 style="display: inline-flex; align-items: center; gap: 8px; margin: 0;">
-                            Lead Field Mapping
-                            <span class="info-btn" data-tooltip-multiline="Map your Facebook Lead Form columns to CRM fields. Starred fields are required. All other columns are automatically saved under Custom Data." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                                <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                            </span>
-                        </h2>
-                    </div>
-                    <div style="display:flex; gap:8px; align-items:center;">
-                        <select id="mappingPipelineSelect" class="btn btn-secondary" style="height:36px; padding:0 12px; font-size:13px; font-weight:600; border-color: var(--primary-color); color: var(--primary-color); background: var(--bg-card);">
-                        </select>
-                        <button class="btn btn-secondary btn-sm mapping-refresh-btn" onclick="refreshMappingSchema()">
-                            <i data-feather="refresh-cw" style="width: 14px; margin-right: 6px;"></i> Refresh Discovered Columns
-                        </button>
-                    </div>
+                <div style="display:flex; gap:8px; align-items:center; margin-bottom:24px; justify-content:flex-end;">
+                    <select id="mappingPipelineSelect" class="btn btn-secondary" style="height:36px; padding:0 12px; font-size:13px; font-weight:600; border-color: var(--primary-color); color: var(--primary-color); background: var(--bg-card);">
+                    </select>
+                    <button class="btn btn-secondary btn-sm mapping-refresh-btn" onclick="refreshMappingSchema()">
+                        <i data-feather="refresh-cw" style="width: 14px; margin-right: 6px;"></i> Refresh Discovered Columns
+                    </button>
                 </div>
 
                 <div class="card" style="padding: 24px; border-radius: 8px; border: 1px solid var(--border-color); background: var(--bg-card);">
