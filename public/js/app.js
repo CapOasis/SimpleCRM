@@ -85,6 +85,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let leadsLimit = 20;
     let totalLeads = 0;
 
+    let currentPipeline = 'Default Pipeline';
+
     // --- Backend API Sync Logic ---
 
     async function updateLeadStatus(leadId, newStatus) {
@@ -115,12 +117,12 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         }
 
-        const countData = await fetchData('/api/leads/count');
+        const countData = await fetchData(`/api/leads/count?pipeline=${encodeURIComponent(currentPipeline)}`);
         if (countData && !countData.error) {
             totalLeads = countData.total;
         }
 
-        const leads = await fetchData(`/api/leads?page=${currentPage}&limit=${leadsLimit}`);
+        const leads = await fetchData(`/api/leads?page=${currentPage}&limit=${leadsLimit}&pipeline=${encodeURIComponent(currentPipeline)}`);
         if (leads && !leads.error) {
             renderLeads(leads);
         }
@@ -136,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     async function loadStages() {
-        const stages = await fetchData('/api/stages');
+        const stages = await fetchData(`/api/stages?pipeline=${encodeURIComponent(currentPipeline)}`);
         if (stages) {
             currentStages = stages;
             renderFlows();
@@ -145,9 +147,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return [];
     }
 
-    async function loadInitialData() {
-        await loadStages(); // Load stages first as other views depend on them
+    async function loadPipelines() {
+        const select = document.getElementById('activePipelineSelect');
+        if (!select) return;
 
+        const pipelines = await fetchData('/api/pipelines');
+        if (pipelines) {
+            const originalVal = select.value || currentPipeline;
+            select.innerHTML = pipelines.map(p => `<option value="${p}" ${p === originalVal ? 'selected' : ''}>${p}</option>`).join('');
+            currentPipeline = select.value || 'Default Pipeline';
+        }
+    }
+
+    async function loadInitialData() {
+        await loadPipelines();
+        await loadStages(); // Load stages first as other views depend on them
         await loadLeads();
 
         const automations = await fetchData('/api/automations');
@@ -160,6 +174,58 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshMappingSchema();
         loadWorkflows();
     }
+
+    // Pipeline Selector & Modal Event Handlers
+    const pipelineSelect = document.getElementById('activePipelineSelect');
+    if (pipelineSelect) {
+        pipelineSelect.addEventListener('change', async () => {
+            currentPipeline = pipelineSelect.value;
+            currentPage = 1;
+            await loadStages();
+            await loadLeads();
+        });
+    }
+
+    window.openCreatePipelineModal = () => {
+        const modal = document.getElementById('createPipelineModal');
+        if (modal) {
+            modal.classList.add('active');
+            document.getElementById('newPipelineNameInput').value = '';
+        }
+    };
+
+    window.closeCreatePipelineModal = () => {
+        const modal = document.getElementById('createPipelineModal');
+        if (modal) modal.classList.remove('active');
+    };
+
+    window.submitNewPipeline = async (e) => {
+        e.preventDefault();
+        const nameInput = document.getElementById('newPipelineNameInput');
+        if (!nameInput) return;
+        const name = nameInput.value.trim();
+        if (!name) return;
+
+        const res = await fetchData('/api/pipelines', {
+            method: 'POST',
+            body: JSON.stringify({ name })
+        });
+
+        if (res && res.pipelines) {
+            showToast(`Pipeline "${name}" created successfully!`);
+            closeCreatePipelineModal();
+            currentPipeline = name;
+            
+            await loadPipelines();
+            const select = document.getElementById('activePipelineSelect');
+            if (select) select.value = name;
+            
+            await loadStages();
+            await loadLeads();
+        } else {
+            showToast(res ? res.error : "Failed to create pipeline", "error");
+        }
+    };
 
     function setupIntegrationTabs() {
         const tabs = document.querySelectorAll('.sub-nav-item');
@@ -456,11 +522,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Create columns based on currentStages
             currentStages.forEach(stage => {
+                const displayStageName = stage.name.includes(':') ? stage.name.split(':')[1] : stage.name;
                 const column = document.createElement('div');
                 column.className = 'kanban-column';
                 column.innerHTML = `
                     <div class="column-header">
-                        <div><span class="status-dot" style="background: ${stage.color || '#3b82f6'}"></span> ${stage.name.charAt(0).toUpperCase() + stage.name.slice(1)}</div>
+                        <div><span class="status-dot" style="background: ${stage.color || '#3b82f6'}"></span> ${displayStageName.charAt(0).toUpperCase() + displayStageName.slice(1)}</div>
                         <span class="column-count" id="count-${stage.name}">0</span>
                     </div>
                     <div class="column-body" id="board-${stage.name}"></div>
@@ -769,7 +836,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: document.getElementById('leadName').value,
                 email: document.getElementById('leadEmail').value,
                 phone: document.getElementById('leadPhone').value,
-                source: 'Manual'
+                source: 'Manual',
+                status: currentStages.length > 0 ? currentStages[0].name : 'new'
             };
 
             const result = await fetchData('/api/leads', {
@@ -2691,6 +2759,23 @@ document.addEventListener('DOMContentLoaded', () => {
         refreshIcons();
     };
 
+    window.saveFormPipelineMapping = async (formId, pipelineName) => {
+        // Fetch current mappings
+        const mappings = await fetchData('/api/pipelines/mappings') || {};
+        mappings[formId] = pipelineName;
+        
+        const res = await fetchData('/api/pipelines/mappings', {
+            method: 'POST',
+            body: JSON.stringify({ mappings })
+        });
+        
+        if (res && res.success) {
+            showToast("Pipeline mapping updated successfully!");
+        } else {
+            showToast("Failed to update mapping", "error");
+        }
+    };
+
     window.loadFacebookFormsTab = async () => {
         const container = document.getElementById('meta-forms-container');
         if (!container) return;
@@ -2716,8 +2801,13 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Fetch forms
-        const forms = await fetchData('/api/meta/forms');
+        // Fetch forms, pipelines, and mappings
+        const [forms, pipelines, mappings] = await Promise.all([
+            fetchData('/api/meta/forms'),
+            fetchData('/api/pipelines'),
+            fetchData('/api/pipelines/mappings')
+        ]);
+
         if (!forms || forms.length === 0) {
             container.innerHTML = `
                 <div class="card" style="padding: 40px; text-align: center;">
@@ -2727,16 +2817,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const pipelinesList = pipelines || ['Default Pipeline'];
+        const mappingsDict = mappings || {};
+
         // Render forms table
         const rows = forms.map(f => {
-            const statusColor = f.status === 'ACTIVE' ? '#10b981' : '#64748b';
-            const statusBg = f.status === 'ACTIVE' ? 'rgba(16,185,129,0.1)' : 'rgba(100,116,139,0.1)';
+            const currentMappedPipeline = mappingsDict[f.id] || 'Default Pipeline';
+            const pipelineOptions = pipelinesList.map(p => `
+                <option value="${p}" ${p === currentMappedPipeline ? 'selected' : ''}>${p}</option>
+            `).join('');
+
             return `
                 <tr style="border-bottom: 1px solid var(--border-color);">
                     <td style="font-weight: 600; color: var(--text-primary); padding: 16px 24px;">${f.name}</td>
                     <td style="padding: 16px 24px;">${f.pageName}</td>
                     <td style="padding: 16px 24px;">
-                        <span class="badge" style="background: ${statusBg}; color: ${statusColor}; border: none; padding: 4px 8px; border-radius: 4px; font-weight: 500;">${f.status}</span>
+                        <select onchange="saveFormPipelineMapping('${f.id}', this.value)" style="height:32px; padding:0 8px; font-size:12px; font-weight:500; border-radius:4px; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-primary);">
+                            ${pipelineOptions}
+                        </select>
                     </td>
                     <td style="padding: 16px 24px;">${f.leadsCount} leads</td>
                     <td style="padding: 16px 24px; text-align: right;">
@@ -2760,7 +2858,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <tr style="border-bottom: 1px solid var(--border-color); background: var(--bg-light);">
                             <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Form Name</th>
                             <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Facebook Page</th>
-                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Status</th>
+                            <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Connected Pipeline</th>
                             <th style="text-align: left; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Sync Stats</th>
                             <th style="text-align: right; padding: 16px 24px; font-weight: 600; color: var(--text-muted); font-size: 11px; text-transform: uppercase; border-bottom: 1px solid var(--border-color);">Actions</th>
                         </tr>
