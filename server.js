@@ -650,11 +650,22 @@ app.get('/api/stats/dashboard', async (req, res) => {
 // --- SETTINGS API ---
 
 app.get('/api/settings', async (req, res) => {
+    const { pipeline } = req.query;
     try {
         const { data, error } = await db.from('settings').select('*');
         if (error) throw error;
         const config = {};
         (data || []).forEach(s => config[s.key] = s.value);
+
+        if (pipeline) {
+            const nameKey = `mapping_name_for_${pipeline}`;
+            const emailKey = `mapping_email_for_${pipeline}`;
+            const phoneKey = `mapping_phone_for_${pipeline}`;
+
+            if (config[nameKey] !== undefined) config.mapping_name = config[nameKey];
+            if (config[emailKey] !== undefined) config.mapping_email = config[emailKey];
+            if (config[phoneKey] !== undefined) config.mapping_phone = config[phoneKey];
+        }
         res.json(config);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -663,11 +674,16 @@ app.get('/api/settings', async (req, res) => {
 
 app.post('/api/settings', async (req, res) => {
     const settings = req.body;
+    const { pipeline } = req.query;
     try {
         for (const [key, value] of Object.entries(settings)) {
+            let saveKey = key;
+            if (pipeline && ['mapping_name', 'mapping_email', 'mapping_phone'].includes(key)) {
+                saveKey = `${key}_for_${pipeline}`;
+            }
             const { error } = await db
                 .from('settings')
-                .upsert({ key, value }, { onConflict: 'key' });
+                .upsert({ key: saveKey, value }, { onConflict: 'key' });
             if (error) throw error;
         }
         res.json({ success: true });
@@ -683,14 +699,31 @@ app.post('/api/leads/remap', async (req, res) => {
         const config = {};
         (settingsData || []).forEach(s => config[s.key] = s.value);
 
-        const mapName = config['mapping_name'] || 'name';
-        const mapEmail = config['mapping_email'] || 'email';
-        const mapPhone = config['mapping_phone'] || 'phone';
+        let pipelines = ['SaladO'];
+        const pipelinesSetting = config['pipelines'];
+        if (pipelinesSetting) {
+            try { pipelines = JSON.parse(pipelinesSetting); } catch (e) {}
+        }
+        const firstPipeline = pipelines[0] || 'SaladO';
 
-        const { data: leads } = await db.from('leads').select('id, custom_data').not('custom_data', 'is', null);
+        const { data: leads } = await db.from('leads').select('id, status, custom_data').not('custom_data', 'is', null);
 
+        let remapCount = 0;
         for (const lead of (leads || [])) {
             try {
+                let pipeline = firstPipeline;
+                if (lead.status && lead.status.includes(':')) {
+                    pipeline = lead.status.split(':')[0];
+                }
+
+                const nameKey = `mapping_name_for_${pipeline}`;
+                const emailKey = `mapping_email_for_${pipeline}`;
+                const phoneKey = `mapping_phone_for_${pipeline}`;
+
+                const mapName = config[nameKey] || config['mapping_name'] || 'full_name';
+                const mapEmail = config[emailKey] || config['mapping_email'] || 'email';
+                const mapPhone = config[phoneKey] || config['mapping_phone'] || 'phone_number';
+
                 const data = typeof lead.custom_data === 'string' ? JSON.parse(lead.custom_data) : lead.custom_data;
                 const lookup = (key) => {
                     if (!key) return null;
@@ -699,15 +732,18 @@ app.post('/api/leads/remap', async (req, res) => {
                     return actualKey ? data[actualKey] : null;
                 };
 
-                const newName = lookup(mapName) || 'Unknown';
-                const newEmail = lookup(mapEmail);
-                const newPhone = lookup(mapPhone);
+                const newName = lookup(mapName) || lookup('full_name') || lead.name || 'Unknown';
+                const newEmail = lookup(mapEmail) || lookup('email');
+                const newPhone = lookup(mapPhone) || lookup('phone_number') || lookup('phone');
 
                 await db.from('leads').update({ name: newName, email: newEmail, phone: newPhone }).eq('id', lead.id);
-            } catch (e) {}
+                remapCount++;
+            } catch (e) {
+                console.error('[Remap Lead Error]', e);
+            }
         }
 
-        res.json({ success: true, count: leads ? leads.length : 0 });
+        res.json({ success: true, count: remapCount });
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -826,18 +862,51 @@ app.post('/api/pipelines/mappings', async (req, res) => {
     }
 });
 
-async function getPipelineStageForForm(formId) {
-    if (!formId) return 'new';
+async function getPipelineForForm(formId) {
+    if (!formId) return null;
     try {
         const { data: mappingsData } = await db.from('settings').select('*').eq('key', 'form_pipeline_mappings').single();
         if (mappingsData && mappingsData.value) {
             const mappings = JSON.parse(mappingsData.value);
             const pipeline = mappings[formId];
-            if (pipeline && pipeline !== 'Default Pipeline') {
-                const { data: stages } = await db.from('stages').select('name').like('name', `${pipeline}:%`).order('order_index', { ascending: true });
-                if (stages && stages.length > 0) {
-                    return stages[0].name;
-                }
+            return (pipeline && pipeline !== 'Default Pipeline') ? pipeline : null;
+        }
+    } catch (e) {}
+    return null;
+}
+
+async function getMappingForPipeline(pipeline) {
+    const mapping = { name: 'full_name', email: 'email', phone: 'phone_number' };
+    try {
+        const { data: settingsData } = await db.from('settings').select('*');
+        const config = {};
+        (settingsData || []).forEach(s => config[s.key] = s.value);
+
+        if (pipeline) {
+            const nameKey = `mapping_name_for_${pipeline}`;
+            const emailKey = `mapping_email_for_${pipeline}`;
+            const phoneKey = `mapping_phone_for_${pipeline}`;
+
+            if (config[nameKey]) mapping.name = config[nameKey];
+            if (config[emailKey]) mapping.email = config[emailKey];
+            if (config[phoneKey]) mapping.phone = config[phoneKey];
+        } else {
+            if (config.mapping_name) mapping.name = config.mapping_name;
+            if (config.mapping_email) mapping.email = config.mapping_email;
+            if (config.mapping_phone) mapping.phone = config.mapping_phone;
+        }
+    } catch (e) {}
+    return mapping;
+}
+
+async function getPipelineStageForForm(formId) {
+    if (!formId) return 'new';
+    try {
+        const pipeline = await getPipelineForForm(formId);
+        if (pipeline) {
+            const { data: stages } = await db.from('stages').select('name').like('name', `${pipeline}:%`).order('order_index', { ascending: true });
+            if (stages && stages.length > 0) {
+                return stages[0].name;
             }
         }
     } catch (e) {
@@ -1128,9 +1197,25 @@ app.post('/api/meta/sync-leads', async (req, res) => {
                     });
                 }
 
-                const name = fields.full_name || fields.first_name + ' ' + fields.last_name || 'Meta Lead';
-                const email = fields.email || null;
-                const phone = fields.phone_number || fields.phone || null;
+                const pipeline = await getPipelineForForm(form.id);
+                const mapping = await getMappingForPipeline(pipeline);
+
+                const getVal = (mapKey, defaultKey) => {
+                    const keys = [mapKey, defaultKey];
+                    for (const k of keys) {
+                        if (!k) continue;
+                        const lowerK = k.toLowerCase();
+                        const found = Object.keys(fields).find(fk => fk.toLowerCase() === lowerK);
+                        if (found && fields[found]) return fields[found];
+                    }
+                    return null;
+                };
+
+                const name = getVal(mapping.name, 'full_name') || 
+                             (fields.first_name && fields.last_name ? (fields.first_name + ' ' + fields.last_name) : null) || 
+                             'Meta Lead';
+                const email = getVal(mapping.email, 'email') || null;
+                const phone = getVal(mapping.phone, 'phone_number') || getVal(mapping.phone, 'phone') || null;
 
                 // Check for duplicates in DB based on email (if exists) or custom_data matching the Facebook Lead ID
                 let existingLeadId = null;
@@ -1876,17 +1961,48 @@ app.post('/api/webhooks/meta', async (req, res) => {
             }
 
             const status = await getPipelineStageForForm(formId);
+            const pipeline = await getPipelineForForm(formId);
+            const mapping = await getMappingForPipeline(pipeline);
+
+            // Parse fields
+            const fields = { facebook_lead_id: leadgenId, form_id: formId };
+            if (leadData.raw) {
+                Object.assign(fields, leadData.raw);
+            } else {
+                fields.full_name = leadData.name;
+                fields.email = leadData.email;
+                fields.phone_number = leadData.phone;
+            }
+
+            const getVal = (mapKey, defaultKey) => {
+                const keys = [mapKey, defaultKey];
+                for (const k of keys) {
+                    if (!k) continue;
+                    const lowerK = k.toLowerCase();
+                    const found = Object.keys(fields).find(fk => fk.toLowerCase() === lowerK);
+                    if (found && fields[found]) return fields[found];
+                }
+                return null;
+            };
+
+            const name = getVal(mapping.name, 'full_name') || 
+                         (fields.first_name && fields.last_name ? (fields.first_name + ' ' + fields.last_name) : null) || 
+                         leadData.name ||
+                         'Meta Lead';
+            const email = getVal(mapping.email, 'email') || leadData.email || null;
+            const phone = getVal(mapping.phone, 'phone_number') || getVal(mapping.phone, 'phone') || leadData.phone || null;
+
             const createdAt = leadData.created_time || new Date().toISOString();
             const { data, error } = await db
                 .from('leads')
                 .insert([{
-                    name: leadData.name,
-                    email: leadData.email || null,
-                    phone: leadData.phone || null,
+                    name,
+                    email,
+                    phone,
                     source: 'Meta Ads',
                     status,
                     created_at: createdAt,
-                    custom_data: { ...leadData, form_id: formId }
+                    custom_data: fields
                 }])
                 .select();
 
@@ -1907,10 +2023,15 @@ async function fetchMetaLeadDetails(leadId) {
     if (!accessToken) accessToken = process.env.META_PAGE_ACCESS_TOKEN;
 
     if (!accessToken || accessToken === 'your_page_access_token_here') {
-        return { name: `Meta Lead ${leadId}`, email: 'mock@meta.com', phone: '+123456789' };
+        return { 
+            name: `Meta Lead ${leadId}`, 
+            email: 'mock@meta.com', 
+            phone: '+123456789',
+            raw: { full_name: `Meta Lead ${leadId}`, email: 'mock@meta.com', phone_number: '+123456789' }
+        };
     }
 
-    const url = `https://graph.facebook.com/v19.0/${leadId}?fields=id,name,email,phone,created_time&access_token=${accessToken}`;
+    const url = `https://graph.facebook.com/v19.0/${leadId}?fields=id,field_data,created_time&access_token=${accessToken}`;
     try {
         const response = await fetch(url);
         if (!response.ok) throw new Error(`Meta API error: ${response.statusText}`);
@@ -1919,13 +2040,17 @@ async function fetchMetaLeadDetails(leadId) {
         const fields = {};
         if (data.field_data) {
             data.field_data.forEach(item => {
-                fields[item.name] = item.values[0];
+                if (item.values && item.values[0]) {
+                    fields[item.name] = item.values[0];
+                }
             });
         }
         return {
             name: fields.full_name || fields.first_name + ' ' + fields.last_name || 'Meta Lead',
             email: fields.email,
-            phone: fields.phone_number
+            phone: fields.phone_number,
+            created_time: data.created_time,
+            raw: fields
         };
     } catch (err) {
         return null;

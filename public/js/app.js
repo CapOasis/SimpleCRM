@@ -252,6 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPage = 1;
             await loadStages();
             await loadLeads();
+            await refreshMappingSchema();
         });
     }
 
@@ -263,6 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentPage = 1;
             await loadStages();
             await loadLeads();
+            await refreshMappingSchema();
         });
     }
 
@@ -368,7 +370,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.refreshMappingSchema = async () => {
         const schema = await fetchData('/api/leads/schema');
-        const settings = await fetchData('/api/settings') || {};
+        const settings = await fetchData(`/api/settings?pipeline=${encodeURIComponent(currentPipeline)}`) || {};
 
         const nameSel = document.getElementById('mapSelectName');
         const emailSel = document.getElementById('mapSelectEmail');
@@ -408,7 +410,7 @@ document.addEventListener('DOMContentLoaded', () => {
             mapping_phone: phoneSel.value
         };
 
-        const res = await fetchData('/api/settings', {
+        const res = await fetchData(`/api/settings?pipeline=${encodeURIComponent(currentPipeline)}`, {
             method: 'POST',
             body: JSON.stringify(body)
         });
