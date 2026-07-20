@@ -1000,8 +1000,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 else if (s.type === 'send_email') icon = 'mail';
                 else if (s.type === 'send_whatsapp') icon = 'message-circle';
                 else if (s.type === 'notify_team') icon = 'bell';
+                else if (s.type === 'change_stage') icon = 'git-commit';
                 return `<span class="workflow-step-pill"><i data-feather="${icon}"></i> ${idx + 1}</span>`;
             }).join(' <i data-feather="chevrons-right" style="width:12px;color:var(--text-muted);"></i> ');
+
+            let triggerTextText = '';
+            if (wf.trigger && wf.trigger.startsWith('stage:')) {
+                const stageName = wf.trigger.substring(6);
+                triggerTextText = `Stage: ${stageName.charAt(0).toUpperCase() + stageName.slice(1)}`;
+            } else {
+                const sourceVal = (wf.trigger && wf.trigger.startsWith('source:')) ? wf.trigger.substring(7) : (wf.trigger || 'any');
+                triggerTextText = `Source: ${sourceVal === 'any' ? 'Any Source' : sourceVal}`;
+            }
 
             card.innerHTML = `
                 <div class="workflow-card-icon">
@@ -1010,7 +1020,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <div class="workflow-card-body">
                     <div class="workflow-card-name">${wf.name}</div>
                     <div class="workflow-card-meta">
-                        <span>Trigger: Source = <strong>${wf.trigger === 'any' ? 'Any Source' : wf.trigger}</strong></span>
+                        <span>Trigger: <strong>${triggerTextText}</strong></span>
                         <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
                             ${stepPills || '<span style="font-size:12px;color:var(--text-muted);">No steps defined</span>'}
                         </div>
@@ -1167,6 +1177,130 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof feather !== 'undefined') feather.replace();
     }
 
+    // Switch between source and stage trigger types in workflow builder
+    window.setWfTriggerType = (type) => {
+        const sourceBtn = document.getElementById('wfTriggerTypeSourceBtn');
+        const stageBtn = document.getElementById('wfTriggerTypeStageBtn');
+        const sourceGroup = document.getElementById('wfTriggerSourceGroup');
+        const stageGroup = document.getElementById('wfTriggerStageGroup');
+        const sentencePrefix = document.getElementById('wfTriggerSentencePrefix');
+        const token = document.getElementById('wfSourceToken');
+
+        if (type === 'stage') {
+            if (sourceBtn) sourceBtn.classList.remove('active');
+            if (stageBtn) stageBtn.classList.add('active');
+            if (sourceGroup) sourceGroup.style.display = 'none';
+            if (stageGroup) stageGroup.style.display = 'block';
+            if (sentencePrefix) sentencePrefix.textContent = 'lead enters stage';
+            
+            const stageVal = document.getElementById('wfTriggerStage')?.value;
+            if (token) token.textContent = stageVal ? (stageVal.charAt(0).toUpperCase() + stageVal.slice(1)) : 'Select Stage';
+        } else {
+            if (sourceBtn) sourceBtn.classList.add('active');
+            if (stageBtn) stageBtn.classList.remove('active');
+            if (sourceGroup) sourceGroup.style.display = 'block';
+            if (stageGroup) stageGroup.style.display = 'none';
+            if (sentencePrefix) sentencePrefix.textContent = 'a new lead arrives from';
+            
+            const sourceVal = document.getElementById('wfTriggerSource')?.value || 'any';
+            if (token) token.textContent = sourceVal === 'any' ? 'Any Source' : sourceVal;
+        }
+    };
+
+    // Populate trigger stages custom dropdown
+    async function populateWfTriggerStages() {
+        const triggerSelect = document.getElementById('wfTriggerStage');
+        const customWrapper = document.getElementById('wfTriggerStageWrapper');
+        if (!triggerSelect || !customWrapper) return;
+
+        // Use currentStages or fetch them if empty
+        let stages = currentStages || [];
+        if (stages.length === 0) {
+            stages = await fetchData(`/api/stages?pipeline=${encodeURIComponent(currentPipeline || '')}`) || [];
+        }
+
+        // Rebuild select options
+        triggerSelect.innerHTML = '<option value="">Select Stage</option>';
+        stages.forEach(stg => {
+            const opt = document.createElement('option');
+            opt.value = stg.name;
+            opt.textContent = stg.name.charAt(0).toUpperCase() + stg.name.slice(1);
+            triggerSelect.appendChild(opt);
+        });
+
+        // Rebuild custom options
+        const optionsContainer = customWrapper.querySelector('.custom-options-container');
+        if (optionsContainer) {
+            optionsContainer.innerHTML = '';
+            
+            const currentVal = triggerSelect.value || '';
+
+            stages.forEach(stg => {
+                const opt = document.createElement('div');
+                opt.className = `custom-option ${currentVal === stg.name ? 'selected' : ''}`;
+                opt.setAttribute('data-value', stg.name);
+                opt.innerHTML = `<i data-feather="grid" style="color: ${stg.color || 'var(--primary-color)'}; width:14px; height:14px;"></i> <span>${stg.name.charAt(0).toUpperCase() + stg.name.slice(1)}</span>`;
+                optionsContainer.appendChild(opt);
+            });
+        }
+
+        // Toggle custom options popover
+        const selectTrigger = customWrapper.querySelector('.custom-select-trigger');
+        if (selectTrigger) {
+            selectTrigger.onclick = (e) => {
+                e.stopPropagation();
+                const container = customWrapper.querySelector('.custom-options-container');
+                if (container) {
+                    const isVisible = container.style.display === 'block';
+                    container.style.display = isVisible ? 'none' : 'block';
+                    customWrapper.classList.toggle('active', !isVisible);
+                }
+            };
+        }
+
+        // Handle custom option selection
+        customWrapper.querySelectorAll('.custom-option').forEach(opt => {
+            opt.onclick = (e) => {
+                e.stopPropagation();
+                const val = opt.getAttribute('data-value');
+                triggerSelect.value = val;
+
+                // Update select trigger styling & text
+                const triggerText = selectTrigger.querySelector('.custom-select-trigger-text');
+                const triggerIcon = selectTrigger.querySelector('.custom-select-trigger-icon');
+                const valLabel = opt.querySelector('span').textContent;
+                const valIcon = opt.querySelector('svg').outerHTML;
+                
+                if (triggerText) triggerText.textContent = valLabel;
+                if (triggerIcon) triggerIcon.innerHTML = valIcon;
+
+                // Update select highlight
+                customWrapper.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+
+                // Close options
+                const container = customWrapper.querySelector('.custom-options-container');
+                if (container) container.style.display = 'none';
+                customWrapper.classList.remove('active');
+
+                // Update natural language workflow preview token
+                const token = document.getElementById('wfSourceToken');
+                if (token) {
+                    token.textContent = valLabel;
+                }
+            };
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            const container = customWrapper.querySelector('.custom-options-container');
+            if (container) container.style.display = 'none';
+            customWrapper.classList.remove('active');
+        });
+
+        if (typeof feather !== 'undefined') feather.replace();
+    }
+
     let currentEditingWfId = null;
 
     // Bind real-time token text to name input changes
@@ -1219,6 +1353,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (srcSelect) srcSelect.value = 'any';
         const srcToken = document.getElementById('wfSourceToken');
         if (srcToken) srcToken.textContent = 'Any Source';
+
+        // Reset trigger stage select
+        const stgSelect = document.getElementById('wfTriggerStage');
+        if (stgSelect) stgSelect.value = '';
+        setWfTriggerType('source');
+        populateWfTriggerStages();
 
         // Collapse trigger and name panels
         toggleWfDocSection('name');
@@ -1293,13 +1433,65 @@ document.addEventListener('DOMContentLoaded', () => {
         const headerName = document.getElementById('wfHeaderName');
         if (headerName) headerName.textContent = wf.name || 'Untitled Workflow';
 
-        const srcSelect = document.getElementById('wfTriggerSource');
-        if (srcSelect) srcSelect.value = wf.trigger || 'any';
-        const srcToken = document.getElementById('wfSourceToken');
-        if (srcToken) srcToken.textContent = wf.trigger === 'any' ? 'Any Source' : wf.trigger;
+        await populateWfTriggerSources();
+        await populateWfTriggerStages();
+
+        const trg = wf.trigger || 'any';
+        if (trg.startsWith('stage:')) {
+            const stageVal = trg.substring(6);
+            const stgSelect = document.getElementById('wfTriggerStage');
+            if (stgSelect) stgSelect.value = stageVal;
+            setWfTriggerType('stage');
+            
+            const customStageWrapper = document.getElementById('wfTriggerStageWrapper');
+            if (customStageWrapper) {
+                const selectTrigger = customStageWrapper.querySelector('.custom-select-trigger');
+                const triggerText = selectTrigger?.querySelector('.custom-select-trigger-text');
+                const valLabel = stageVal.charAt(0).toUpperCase() + stageVal.slice(1);
+                if (triggerText) triggerText.textContent = valLabel;
+                
+                customStageWrapper.querySelectorAll('.custom-option').forEach(o => {
+                    if (o.getAttribute('data-value') === stageVal) {
+                        o.classList.add('selected');
+                        const triggerIcon = selectTrigger?.querySelector('.custom-select-trigger-icon');
+                        if (triggerIcon) triggerIcon.innerHTML = o.querySelector('svg')?.outerHTML || '<i data-feather="grid"></i>';
+                    } else {
+                        o.classList.remove('selected');
+                    }
+                });
+            }
+            
+            const srcToken = document.getElementById('wfSourceToken');
+            if (srcToken) srcToken.textContent = stageVal.charAt(0).toUpperCase() + stageVal.slice(1);
+        } else {
+            const sourceVal = trg.startsWith('source:') ? trg.substring(7) : trg;
+            const srcSelect = document.getElementById('wfTriggerSource');
+            if (srcSelect) srcSelect.value = sourceVal;
+            setWfTriggerType('source');
+            
+            const customSourceWrapper = document.getElementById('wfTriggerSourceWrapper');
+            if (customSourceWrapper) {
+                const selectTrigger = customSourceWrapper.querySelector('.custom-select-trigger');
+                const triggerText = selectTrigger?.querySelector('.custom-select-trigger-text');
+                const valLabel = sourceVal === 'any' ? 'Any Source' : sourceVal;
+                if (triggerText) triggerText.textContent = valLabel;
+                
+                customSourceWrapper.querySelectorAll('.custom-option').forEach(o => {
+                    if (o.getAttribute('data-value') === sourceVal) {
+                        o.classList.add('selected');
+                        const triggerIcon = selectTrigger?.querySelector('.custom-select-trigger-icon');
+                        if (triggerIcon) triggerIcon.innerHTML = o.querySelector('svg')?.outerHTML || '<i data-feather="globe"></i>';
+                    } else {
+                        o.classList.remove('selected');
+                    }
+                });
+            }
+            
+            const srcToken = document.getElementById('wfSourceToken');
+            if (srcToken) srcToken.textContent = sourceVal === 'any' ? 'Any Source' : sourceVal;
+        }
 
         currentWfSteps = wf.steps || [];
-        await populateWfTriggerSources();
         renderWfStepsList();
 
         // Collapse all inline cards
@@ -1402,6 +1594,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (type === 'notify_team') {
                     config.title = '';
                     config.body = '';
+                } else if (type === 'change_stage') {
+                    config.stage = '';
                 }
 
                 currentWfSteps.push({ type, config });
@@ -1430,6 +1624,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const title = step.config.title || '';
             const titleText = title ? `"${title}"` : 'empty title';
             return `Then notify team: <span class="token-link">${escapeHtml(titleText)}</span>`;
+        } else if (step.type === 'change_stage') {
+            const stage = step.config.stage || '';
+            const stageText = stage ? stage.charAt(0).toUpperCase() + stage.slice(1) : 'Select Stage';
+            return `Then change lead stage to: <span class="token-link">${escapeHtml(stageText)}</span>`;
         }
         return '';
     }
@@ -1536,6 +1734,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         <code onclick="insertWfTagInline(${idx}, 'wf-notify-body', '{{source}}')">{{source}}</code>
                         <code onclick="insertWfTagInline(${idx}, 'wf-notify-body', '{{assigned}}')">{{assigned}}</code>
                     </div>
+                </div>
+            `;
+        } else if (step.type === 'change_stage') {
+            const currentStage = step.config.stage || '';
+            const stages = currentStages || [];
+            const options = stages.map(stg => {
+                const selected = stg.name === currentStage ? 'selected' : '';
+                const nameCap = stg.name.charAt(0).toUpperCase() + stg.name.slice(1);
+                return `<option value="${escapeHtml(stg.name)}" ${selected}>${escapeHtml(nameCap)}</option>`;
+            }).join('');
+            return `
+                <div class="inline-config-group">
+                    <label>Target Stage</label>
+                    <select class="form-input wf-change-stage-select" onchange="saveInlineWfStepConfig(${idx})">
+                        <option value="">Select Stage</option>
+                        ${options}
+                    </select>
                 </div>
             `;
         }
@@ -1660,6 +1875,8 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (step.type === 'notify_team') {
             cfg.title = (row.querySelector('.wf-notify-title')?.value || '').trim();
             cfg.body = (row.querySelector('.wf-notify-body')?.value || '').trim();
+        } else if (step.type === 'change_stage') {
+            cfg.stage = row.querySelector('.wf-change-stage-select')?.value || '';
         }
 
         step.config = cfg;
@@ -1848,7 +2065,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (wfSaveBtn) {
         wfSaveBtn.addEventListener('click', async () => {
             const name = document.getElementById('wfName').value.trim();
-            const source = document.getElementById('wfTriggerSource').value;
+            const isStageTrigger = document.getElementById('wfTriggerTypeStageBtn')?.classList.contains('active');
+            let triggerVal = 'any';
+            if (isStageTrigger) {
+                const stageVal = document.getElementById('wfTriggerStage').value;
+                if (!stageVal) {
+                    alert('Please select a stage for the trigger.');
+                    return;
+                }
+                triggerVal = 'stage:' + stageVal;
+            } else {
+                const sourceVal = document.getElementById('wfTriggerSource').value;
+                triggerVal = 'source:' + sourceVal;
+            }
 
             if (!name) {
                 alert('Please give this workflow a name.');
@@ -1882,6 +2111,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         alert(`Step ${i + 1} (Notify Team) must have both title and body configured.`);
                         return;
                     }
+                } else if (s.type === 'change_stage') {
+                    if (!s.config.stage) {
+                        alert(`Step ${i + 1} (Change Stage) must have a target stage selected.`);
+                        return;
+                    }
                 }
             }
 
@@ -1891,7 +2125,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'PATCH',
                     body: JSON.stringify({
                         name,
-                        trigger: source,
+                        trigger: triggerVal,
                         steps: currentWfSteps
                     })
                 });
@@ -1900,7 +2134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     method: 'POST',
                     body: JSON.stringify({
                         name,
-                        trigger: source,
+                        trigger: triggerVal,
                         steps: currentWfSteps
                     })
                 });

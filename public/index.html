@@ -612,11 +612,18 @@
                                 <div class="wf-step-header" onclick="toggleWfDocSection('trigger')">
                                     <div class="wf-step-num"><i data-feather="play" style="width: 12px; height: 12px;"></i></div>
                                     <div class="wf-step-sentence">
-                                        When a new lead arrives from <span id="wfSourceToken" class="token-link">Any Source</span>
+                                        When <span id="wfTriggerSentencePrefix">a new lead arrives from</span> <span id="wfSourceToken" class="token-link">Any Source</span>
                                     </div>
                                 </div>
                                 <div class="wf-step-config-inline" id="wfTriggerConfigPanel" style="display: none;">
-                                     <div class="inline-config-group">
+                                     <div class="inline-config-group" style="margin-bottom: 12px;">
+                                         <label>Trigger Type</label>
+                                         <div class="dist-toggle-row">
+                                             <button type="button" class="dist-btn active" id="wfTriggerTypeSourceBtn" onclick="setWfTriggerType('source')">Lead Ingestion (Source)</button>
+                                             <button type="button" class="dist-btn" id="wfTriggerTypeStageBtn" onclick="setWfTriggerType('stage')">Pipeline Stage (Status)</button>
+                                         </div>
+                                     </div>
+                                     <div class="inline-config-group" id="wfTriggerSourceGroup">
                                          <label>Select Lead Source</label>
                                          <div class="custom-select-wrapper" id="wfTriggerSourceWrapper">
                                              <div class="custom-select-trigger">
@@ -628,6 +635,20 @@
                                          </div>
                                          <select id="wfTriggerSource" style="display:none;">
                                              <option value="any">Any Source</option>
+                                         </select>
+                                     </div>
+                                     <div class="inline-config-group" id="wfTriggerStageGroup" style="display: none;">
+                                         <label>Select Pipeline Stage</label>
+                                         <div class="custom-select-wrapper" id="wfTriggerStageWrapper">
+                                             <div class="custom-select-trigger">
+                                                 <span class="custom-select-trigger-icon"><i data-feather="grid"></i></span>
+                                                 <span class="custom-select-trigger-text">Select Stage</span>
+                                                 <i data-feather="chevron-down" class="chevron"></i>
+                                             </div>
+                                             <div class="custom-options-container" style="display: none;"></div>
+                                         </div>
+                                         <select id="wfTriggerStage" style="display:none;">
+                                             <option value="">Select Stage</option>
                                          </select>
                                      </div>
                                  </div>
@@ -656,6 +677,9 @@
                                 </div>
                                 <div class="custom-option" data-step-type="notify_team">
                                     <i data-feather="bell"></i> <span>Notify Team</span>
+                                </div>
+                                <div class="custom-option" data-step-type="change_stage">
+                                    <i data-feather="git-commit"></i> <span>Change Stage</span>
                                 </div>
                             </div>
                         </div>

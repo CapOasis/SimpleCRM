@@ -1898,12 +1898,12 @@ async function triggerAutomations(triggerType, lead) {
     }
 
     // Also run matching Workflows
-    await triggerWorkflows(lead);
+    await triggerWorkflows(triggerType, lead);
 }
 
 let workflowRoundRobinCounters = {};
 
-async function triggerWorkflows(lead) {
+async function triggerWorkflows(triggerType, lead) {
     try {
         const { data: workflows } = await db
             .from('workflows')
@@ -1911,8 +1911,19 @@ async function triggerWorkflows(lead) {
             .eq('active', true);
 
         const matching = (workflows || []).filter(w => {
-            const src = (w.trigger || 'any').toLowerCase();
-            return src === 'any' || src === (lead.source || '').toLowerCase();
+            const trg = (w.trigger || 'any').trim();
+            const trgLower = trg.toLowerCase();
+            
+            if (trgLower.startsWith('stage:')) {
+                const targetStage = trg.substring(6).trim().toLowerCase();
+                return triggerType === 'status_change' && lead.status && lead.status.toLowerCase() === targetStage;
+            } else if (trgLower.startsWith('source:')) {
+                const targetSource = trg.substring(7).trim().toLowerCase();
+                return triggerType === 'new_lead' && (targetSource === 'any' || (lead.source && lead.source.toLowerCase() === targetSource));
+            } else {
+                // Legacy trigger (defaults to source)
+                return triggerType === 'new_lead' && (trgLower === 'any' || (lead.source && lead.source.toLowerCase() === trgLower));
+            }
         });
 
         for (const wf of matching) {
@@ -1975,6 +1986,22 @@ async function triggerWorkflows(lead) {
                         const title = (cfg.title || 'New Lead Alert').replace('{{name}}', lead.name).replace('{{source}}', lead.source || '');
                         const body = (cfg.body || 'A new lead has come in.').replace('{{name}}', lead.name).replace('{{source}}', lead.source || '').replace('{{assigned}}', lead.assigned_to || 'Unassigned');
                         logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: Team Notification — ${title}: ${body}`;
+                    } else if (step.type === 'change_stage') {
+                        const targetStage = cfg.stage;
+                        if (targetStage) {
+                            await db.from('leads').update({ status: targetStage }).eq('id', lead.id);
+                            const oldStatus = lead.status;
+                            lead.status = targetStage;
+                            logMsg = `[Workflow: ${wf.name}] Step ${i + 1}: Changed lead stage from "${oldStatus}" to "${targetStage}"`;
+                            
+                            // Log stage change event
+                            await db.from('logs').insert([{ lead_id: lead.id, message: `Stage changed from "${oldStatus}" to "${targetStage}" via Workflow: ${wf.name}`, type: 'status_change' }]);
+                            
+                            // Trigger status_change automations & workflows asynchronously
+                            setImmediate(() => {
+                                triggerAutomations('status_change', lead);
+                            });
+                        }
                     }
 
                     if (logMsg) {
