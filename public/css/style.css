@@ -3732,6 +3732,12 @@ input:checked + .settings-switch-slider:before {
 .assignee-add-btn:active {
     transform: scale(0.95);
 }
+.assignee-add-btn svg {
+    transition: transform 0.25s ease;
+}
+.assignee-add-btn.active svg {
+    transform: rotate(45deg);
+}
 
 .assignee-dropdown-menu {
     position: fixed;
