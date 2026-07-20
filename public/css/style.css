@@ -230,10 +230,7 @@ p { color: var(--text-secondary); }
 }
 
 .section-header {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    margin-bottom: 32px;
+    display: none !important;
 }
 
 .section-title h1 {

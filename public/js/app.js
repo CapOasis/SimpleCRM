@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- UI Selectors ---
     const navItems = document.querySelectorAll('.nav-item[data-view]');
     const viewSections = document.querySelectorAll('.view-section');
+    let activeActionsElement = null;
+    let activeActionsParent = null;
     const createAutomationBtn = document.getElementById('createAutomationBtn');
     const createWorkflowBtn = document.getElementById('createWorkflowBtn');
     const backToAutomations = document.getElementById('backToAutomations');
@@ -2607,6 +2609,13 @@ document.addEventListener('DOMContentLoaded', () => {
         // If not logged in, we must not navigate inside yet
         if (!token) return;
 
+        // Move any previously moved actions back to their original parent
+        if (activeActionsElement && activeActionsParent) {
+            activeActionsParent.appendChild(activeActionsElement);
+            activeActionsElement = null;
+            activeActionsParent = null;
+        }
+
         const isAuthorized = currentMember.role === 'admin' ||
             targetView === 'account' ||
             (currentMember.permissions && currentMember.permissions.includes(targetView));
@@ -2674,6 +2683,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 section.classList.remove('active');
             }
         });
+
+        // Move target view's actions to the global header
+        const activeSection = document.getElementById(targetView);
+        if (activeSection) {
+            const actions = activeSection.querySelector('.section-actions') || activeSection.querySelector('.section-header > div');
+            if (actions) {
+                activeActionsElement = actions;
+                activeActionsParent = actions.parentElement;
+                
+                const globalHeaderActions = document.getElementById('globalHeaderActions');
+                if (globalHeaderActions) {
+                    globalHeaderActions.innerHTML = '';
+                    globalHeaderActions.appendChild(actions);
+                }
+            } else {
+                const globalHeaderActions = document.getElementById('globalHeaderActions');
+                if (globalHeaderActions) globalHeaderActions.innerHTML = '';
+            }
+        } else {
+            const globalHeaderActions = document.getElementById('globalHeaderActions');
+            if (globalHeaderActions) globalHeaderActions.innerHTML = '';
+        }
 
         // Force close any active modals/drawers and hide overlay
         const overlay = document.getElementById('overlay');
