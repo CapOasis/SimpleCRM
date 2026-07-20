@@ -592,7 +592,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             ${displayStageName.charAt(0).toUpperCase() + displayStageName.slice(1)}
                         </div>
                         <div class="column-subtext" style="font-size:12px; color:var(--text-muted); font-weight:500;">
-                            ${count} Leads ₹${totalValue.toFixed(2)}
+                            ${count} Leads ${totalValue.toFixed(2)}
                         </div>
                     </div>
                     <div class="column-body" id="board-${stage.name}"></div>
@@ -659,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-bottom-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-top: 1px solid var(--border-color); padding-top:12px;">
                             <div class="card-value" style="font-size:16px; font-weight:700; color:#22c55e;">
-                                ₹${parseFloat(lead.value || 0).toFixed(2)}
+                                ${parseFloat(lead.value || 0).toFixed(2)}
                             </div>
                             <div class="card-actions" style="display:flex; align-items:center; gap:8px;">
                                 <button class="card-action-btn edit-lead-btn" title="Edit Lead" style="background:none; border:none; padding:4px; cursor:pointer; color:var(--text-muted); display:inline-flex; align-items:center;"><i data-feather="edit" style="width:14px; height:14px;"></i></button>
@@ -1093,7 +1093,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             const subtextEl = col.querySelector('.column-subtext');
             if (subtextEl) {
-                subtextEl.textContent = `${count} Leads ₹${totalVal.toFixed(2)}`;
+                subtextEl.textContent = `${count} Leads ${totalVal.toFixed(2)}`;
             }
         });
     }
