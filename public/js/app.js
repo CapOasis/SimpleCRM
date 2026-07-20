@@ -1005,13 +1005,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }).join(' <i data-feather="chevrons-right" style="width:12px;color:var(--text-muted);"></i> ');
 
             let triggerTextText = '';
-            if (wf.trigger && wf.trigger.startsWith('stage:')) {
-                const stageName = wf.trigger.substring(6);
-                triggerTextText = `Stage: ${stageName.charAt(0).toUpperCase() + stageName.slice(1)}`;
-            } else {
-                const sourceVal = (wf.trigger && wf.trigger.startsWith('source:')) ? wf.trigger.substring(7) : (wf.trigger || 'any');
-                triggerTextText = `Source: ${sourceVal === 'any' ? 'Any Source' : sourceVal}`;
+            const trgStr = wf.trigger || 'any';
+            let wfPipeline = 'any';
+            let actualTrigger = trgStr;
+
+            if (trgStr.includes('|')) {
+                const parts = trgStr.split('|');
+                const pipelinePart = parts.find(p => p.startsWith('pipeline:'));
+                const triggerPart = parts.find(p => p.startsWith('trigger:'));
+                if (pipelinePart) wfPipeline = pipelinePart.substring(9);
+                if (triggerPart) actualTrigger = triggerPart.substring(8);
             }
+
+            let condText = '';
+            if (actualTrigger.startsWith('stage:')) {
+                const stageName = actualTrigger.substring(6);
+                condText = `Stage: ${stageName.charAt(0).toUpperCase() + stageName.slice(1)}`;
+            } else {
+                const sourceVal = actualTrigger.startsWith('source:') ? actualTrigger.substring(7) : actualTrigger;
+                condText = `Source: ${sourceVal === 'any' ? 'Any Source' : sourceVal}`;
+            }
+            triggerTextText = `Pipeline: ${wfPipeline === 'any' ? 'Any' : wfPipeline} | ${condText}`;
 
             card.innerHTML = `
                 <div class="workflow-card-icon">
@@ -1301,6 +1315,100 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof feather !== 'undefined') feather.replace();
     }
 
+    // Populate trigger pipelines custom dropdown
+    async function populateWfTriggerPipelines() {
+        const select = document.getElementById('wfTriggerPipeline');
+        const customWrapper = document.getElementById('wfTriggerPipelineWrapper');
+        if (!select || !customWrapper) return;
+
+        const pipelines = await fetchData('/api/pipelines') || [];
+
+        // Rebuild select options
+        select.innerHTML = '<option value="any">Any Pipeline</option>';
+        pipelines.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p;
+            opt.textContent = p;
+            select.appendChild(opt);
+        });
+
+        // Rebuild custom options
+        const optionsContainer = customWrapper.querySelector('.custom-options-container');
+        if (optionsContainer) {
+            optionsContainer.innerHTML = '';
+            
+            const currentVal = select.value || 'any';
+
+            // Add "Any Pipeline" option
+            const optAny = document.createElement('div');
+            optAny.className = `custom-option ${currentVal === 'any' ? 'selected' : ''}`;
+            optAny.setAttribute('data-value', 'any');
+            optAny.innerHTML = `<i data-feather="git-pull-request"></i> <span>Any Pipeline</span>`;
+            optionsContainer.appendChild(optAny);
+
+            pipelines.forEach(p => {
+                const opt = document.createElement('div');
+                opt.className = `custom-option ${currentVal === p ? 'selected' : ''}`;
+                opt.setAttribute('data-value', p);
+                opt.innerHTML = `<i data-feather="git-pull-request"></i> <span>${p}</span>`;
+                optionsContainer.appendChild(opt);
+            });
+        }
+
+        // Toggle custom options popover
+        const selectTrigger = customWrapper.querySelector('.custom-select-trigger');
+        if (selectTrigger) {
+            selectTrigger.onclick = (e) => {
+                e.stopPropagation();
+                const container = customWrapper.querySelector('.custom-options-container');
+                if (container) {
+                    const isVisible = container.style.display === 'block';
+                    container.style.display = isVisible ? 'none' : 'block';
+                    customWrapper.classList.toggle('active', !isVisible);
+                }
+            };
+        }
+
+        // Handle custom option selection
+        customWrapper.querySelectorAll('.custom-option').forEach(opt => {
+            opt.onclick = (e) => {
+                e.stopPropagation();
+                const val = opt.getAttribute('data-value');
+                select.value = val;
+
+                // Update select trigger styling & text
+                const triggerText = selectTrigger.querySelector('.custom-select-trigger-text');
+                const valLabel = opt.querySelector('span').textContent;
+                
+                if (triggerText) triggerText.textContent = valLabel;
+
+                // Update select highlight
+                customWrapper.querySelectorAll('.custom-option').forEach(o => o.classList.remove('selected'));
+                opt.classList.add('selected');
+
+                // Close options
+                const container = customWrapper.querySelector('.custom-options-container');
+                if (container) container.style.display = 'none';
+                customWrapper.classList.remove('active');
+
+                // Update natural language workflow preview token
+                const token = document.getElementById('wfPipelineToken');
+                if (token) {
+                    token.textContent = valLabel;
+                }
+            };
+        });
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', () => {
+            const container = customWrapper.querySelector('.custom-options-container');
+            if (container) container.style.display = 'none';
+            customWrapper.classList.remove('active');
+        });
+
+        if (typeof feather !== 'undefined') feather.replace();
+    }
+
     let currentEditingWfId = null;
 
     // Bind real-time token text to name input changes
@@ -1357,8 +1465,27 @@ document.addEventListener('DOMContentLoaded', () => {
         // Reset trigger stage select
         const stgSelect = document.getElementById('wfTriggerStage');
         if (stgSelect) stgSelect.value = '';
+        
+        // Reset trigger pipeline select & token
+        const pipeSelect = document.getElementById('wfTriggerPipeline');
+        if (pipeSelect) pipeSelect.value = 'any';
+        const pipeToken = document.getElementById('wfPipelineToken');
+        if (pipeToken) pipeToken.textContent = 'Any Pipeline';
+        
+        // Reset custom select highlights for pipeline
+        const customPipeWrapper = document.getElementById('wfTriggerPipelineWrapper');
+        if (customPipeWrapper) {
+            const triggerText = customPipeWrapper.querySelector('.custom-select-trigger .custom-select-trigger-text');
+            if (triggerText) triggerText.textContent = 'Any Pipeline';
+            customPipeWrapper.querySelectorAll('.custom-option').forEach(o => {
+                if (o.getAttribute('data-value') === 'any') o.classList.add('selected');
+                else o.classList.remove('selected');
+            });
+        }
+        
         setWfTriggerType('source');
         populateWfTriggerStages();
+        populateWfTriggerPipelines();
 
         // Collapse trigger and name panels
         toggleWfDocSection('name');
@@ -1435,8 +1562,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await populateWfTriggerSources();
         await populateWfTriggerStages();
+        await populateWfTriggerPipelines();
 
-        const trg = wf.trigger || 'any';
+        const trgStr = wf.trigger || 'any';
+        let wfPipeline = 'any';
+        let trg = trgStr;
+
+        if (trgStr.includes('|')) {
+            const parts = trgStr.split('|');
+            const pipelinePart = parts.find(p => p.startsWith('pipeline:'));
+            const triggerPart = parts.find(p => p.startsWith('trigger:'));
+            if (pipelinePart) wfPipeline = pipelinePart.substring(9);
+            if (triggerPart) trg = triggerPart.substring(8);
+        }
+
+        // Set Pipeline dropdown & token UI
+        const pipeSelect = document.getElementById('wfTriggerPipeline');
+        if (pipeSelect) pipeSelect.value = wfPipeline;
+        const pipeToken = document.getElementById('wfPipelineToken');
+        if (pipeToken) pipeToken.textContent = wfPipeline === 'any' ? 'Any Pipeline' : wfPipeline;
+
+        const customPipeWrapper = document.getElementById('wfTriggerPipelineWrapper');
+        if (customPipeWrapper) {
+            const selectTrigger = customPipeWrapper.querySelector('.custom-select-trigger');
+            const triggerText = selectTrigger?.querySelector('.custom-select-trigger-text');
+            const valLabel = wfPipeline === 'any' ? 'Any Pipeline' : wfPipeline;
+            if (triggerText) triggerText.textContent = valLabel;
+            
+            customPipeWrapper.querySelectorAll('.custom-option').forEach(o => {
+                if (o.getAttribute('data-value') === wfPipeline) {
+                    o.classList.add('selected');
+                } else {
+                    o.classList.remove('selected');
+                }
+            });
+        }
+
         if (trg.startsWith('stage:')) {
             const stageVal = trg.substring(6);
             const stgSelect = document.getElementById('wfTriggerStage');
@@ -2066,18 +2227,20 @@ document.addEventListener('DOMContentLoaded', () => {
         wfSaveBtn.addEventListener('click', async () => {
             const name = document.getElementById('wfName').value.trim();
             const isStageTrigger = document.getElementById('wfTriggerTypeStageBtn')?.classList.contains('active');
-            let triggerVal = 'any';
+            const pipelineVal = document.getElementById('wfTriggerPipeline').value || 'any';
+            let actualTriggerVal = 'any';
             if (isStageTrigger) {
                 const stageVal = document.getElementById('wfTriggerStage').value;
                 if (!stageVal) {
                     alert('Please select a stage for the trigger.');
                     return;
                 }
-                triggerVal = 'stage:' + stageVal;
+                actualTriggerVal = 'stage:' + stageVal;
             } else {
                 const sourceVal = document.getElementById('wfTriggerSource').value;
-                triggerVal = 'source:' + sourceVal;
+                actualTriggerVal = 'source:' + sourceVal;
             }
+            const triggerVal = `pipeline:${pipelineVal}|trigger:${actualTriggerVal}`;
 
             if (!name) {
                 alert('Please give this workflow a name.');

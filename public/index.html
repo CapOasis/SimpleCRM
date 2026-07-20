@@ -612,10 +612,24 @@
                                 <div class="wf-step-header" onclick="toggleWfDocSection('trigger')">
                                     <div class="wf-step-num"><i data-feather="play" style="width: 12px; height: 12px;"></i></div>
                                     <div class="wf-step-sentence">
-                                        When <span id="wfTriggerSentencePrefix">a new lead arrives from</span> <span id="wfSourceToken" class="token-link">Any Source</span>
+                                        In <span id="wfPipelineToken" class="token-link">Any Pipeline</span>, when <span id="wfTriggerSentencePrefix">a new lead arrives from</span> <span id="wfSourceToken" class="token-link">Any Source</span>
                                     </div>
                                 </div>
                                 <div class="wf-step-config-inline" id="wfTriggerConfigPanel" style="display: none;">
+                                     <div class="inline-config-group" style="margin-bottom: 12px;">
+                                         <label>Target Pipeline Scope</label>
+                                         <div class="custom-select-wrapper" id="wfTriggerPipelineWrapper">
+                                             <div class="custom-select-trigger">
+                                                 <span class="custom-select-trigger-icon"><i data-feather="git-pull-request"></i></span>
+                                                 <span class="custom-select-trigger-text">Any Pipeline</span>
+                                                 <i data-feather="chevron-down" class="chevron"></i>
+                                             </div>
+                                             <div class="custom-options-container" style="display: none;"></div>
+                                         </div>
+                                         <select id="wfTriggerPipeline" style="display:none;">
+                                             <option value="any">Any Pipeline</option>
+                                         </select>
+                                     </div>
                                      <div class="inline-config-group" style="margin-bottom: 12px;">
                                          <label>Trigger Type</label>
                                          <div class="dist-toggle-row">

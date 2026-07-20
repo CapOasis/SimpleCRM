@@ -1910,15 +1910,51 @@ async function triggerWorkflows(triggerType, lead) {
             .select('*')
             .eq('active', true);
 
+        // Fetch active pipelines to find the default one
+        const { data: settingsData } = await db.from('settings').select('*').eq('key', 'pipelines').single();
+        let pipelines = ['SaladO'];
+        if (settingsData && settingsData.value) {
+            try { pipelines = JSON.parse(settingsData.value); } catch (e) {}
+        }
+        const firstPipeline = pipelines[0] || 'SaladO';
+
+        // Extract lead's pipeline
+        let leadPipeline = firstPipeline;
+        if (lead.status && lead.status.includes(':')) {
+            leadPipeline = lead.status.split(':')[0];
+        }
+
         const matching = (workflows || []).filter(w => {
-            const trg = (w.trigger || 'any').trim();
-            const trgLower = trg.toLowerCase();
+            const triggerStr = (w.trigger || 'any').trim();
             
+            // Parse serialized format: pipeline:<name>|trigger:<val>
+            let wfPipeline = 'any';
+            let actualTrigger = triggerStr;
+
+            if (triggerStr.includes('|')) {
+                const parts = triggerStr.split('|');
+                const pipelinePart = parts.find(p => p.startsWith('pipeline:'));
+                const triggerPart = parts.find(p => p.startsWith('trigger:'));
+                if (pipelinePart) wfPipeline = pipelinePart.substring(9);
+                if (triggerPart) actualTrigger = triggerPart.substring(8);
+            }
+
+            // Pipeline matching check
+            const pipelineMatches = wfPipeline.toLowerCase() === 'any' || wfPipeline.toLowerCase() === leadPipeline.toLowerCase();
+            if (!pipelineMatches) return false;
+
+            const trgLower = actualTrigger.toLowerCase().trim();
             if (trgLower.startsWith('stage:')) {
-                const targetStage = trg.substring(6).trim().toLowerCase();
-                return triggerType === 'status_change' && lead.status && lead.status.toLowerCase() === targetStage;
+                const targetStage = actualTrigger.substring(6).trim().toLowerCase();
+                
+                // Extract stage name portion (strip prefix if present)
+                let leadStageName = lead.status || '';
+                if (leadStageName.includes(':')) {
+                    leadStageName = leadStageName.split(':')[1];
+                }
+                return triggerType === 'status_change' && leadStageName.toLowerCase() === targetStage;
             } else if (trgLower.startsWith('source:')) {
-                const targetSource = trg.substring(7).trim().toLowerCase();
+                const targetSource = actualTrigger.substring(7).trim().toLowerCase();
                 return triggerType === 'new_lead' && (targetSource === 'any' || (lead.source && lead.source.toLowerCase() === targetSource));
             } else {
                 // Legacy trigger (defaults to source)
