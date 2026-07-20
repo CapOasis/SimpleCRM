@@ -2879,15 +2879,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const pipelinesList = pipelines || ['SaladO'];
+        const pipelinesList = pipelines || [];
         const mappingsDict = mappings || {};
 
         // Render forms table
         const rows = forms.map(f => {
-            const currentMappedPipeline = mappingsDict[f.id] || 'SaladO';
-            const pipelineOptions = pipelinesList.map(p => `
-                <option value="${p}" ${p === currentMappedPipeline ? 'selected' : ''}>${p}</option>
-            `).join('');
+            const currentMappedPipeline = mappingsDict[f.id] || '';
+            const pipelineOptions = [
+                `<option value="" ${!currentMappedPipeline ? 'selected' : ''} style="color: var(--text-muted);">— Not Assigned —</option>`,
+                ...pipelinesList.map(p => `<option value="${p}" ${p === currentMappedPipeline ? 'selected' : ''}>${p}</option>`)
+            ].join('');
 
             return `
                 <tr style="border-bottom: 1px solid var(--border-color);">
