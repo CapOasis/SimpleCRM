@@ -624,6 +624,10 @@ document.addEventListener('DOMContentLoaded', () => {
                             const menu = document.createElement('div');
                             menu.className = 'assignee-dropdown-menu';
                             
+                            const rect = btn.getBoundingClientRect();
+                            menu.style.top = `${rect.bottom + 6}px`;
+                            menu.style.left = `${rect.right - 170}px`;
+                            
                             let menuHtml = `<div class="assignee-dropdown-header"><i data-feather="check" style="width:12px; height:12px; margin-right:4px;"></i> Assign</div>`;
                             
                             cachedTeamMembers.forEach(member => {
@@ -637,8 +641,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             });
                             menu.innerHTML = menuHtml;
                             
-                            const container = card.querySelector('.card-assignees');
-                            container.appendChild(menu);
+                            document.body.appendChild(menu);
                             
                             if (window.feather) window.feather.replace();
 
@@ -662,7 +665,34 @@ document.addEventListener('DOMContentLoaded', () => {
                                     });
                                     
                                     if (response && !response.error) {
-                                        await loadLeads();
+                                        lead.assigned_to = assignedToStr;
+                                        
+                                        // Update local array reference for next click interaction
+                                        assignees.length = 0;
+                                        assignees.push(...updatedAssignees);
+                                        
+                                        // Update card UI instantly without full board reload
+                                        const avatarsContainer = card.querySelector('.card-assignees');
+                                        if (avatarsContainer) {
+                                            avatarsContainer.querySelectorAll('.assignee-avatar').forEach(el => el.remove());
+                                            const newAssigneeHtml = updatedAssignees.map(nName => {
+                                                const initials = nName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                                                let hash = 0;
+                                                for (let i = 0; i < nName.length; i++) {
+                                                    hash = nName.charCodeAt(i) + ((hash << 5) - hash);
+                                                }
+                                                const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                                                const color = '#' + '00000'.substring(0, 6 - c.length) + c;
+                                                return `<div class="assignee-avatar" title="${escapeHtml(nName)}" style="background-color: ${color}">${initials}</div>`;
+                                            }).join('');
+                                            
+                                            const btnEl = avatarsContainer.querySelector('.assignee-add-btn');
+                                            const tempDiv = document.createElement('div');
+                                            tempDiv.innerHTML = newAssigneeHtml;
+                                            while (tempDiv.firstChild) {
+                                                avatarsContainer.insertBefore(tempDiv.firstChild, btnEl);
+                                            }
+                                        }
                                     } else {
                                         alert("Error updating lead assignment.");
                                     }

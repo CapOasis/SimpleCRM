@@ -3734,9 +3734,7 @@ input:checked + .settings-switch-slider:before {
 }
 
 .assignee-dropdown-menu {
-    position: absolute;
-    right: 0;
-    top: 100%;
+    position: fixed;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: 12px;
@@ -3744,7 +3742,6 @@ input:checked + .settings-switch-slider:before {
     z-index: 1000;
     min-width: 170px;
     padding: 8px 0;
-    margin-top: 6px;
     animation: fadeIn 0.15s ease-out;
 }
 .assignee-dropdown-header {
