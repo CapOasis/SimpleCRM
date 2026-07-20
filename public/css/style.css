@@ -119,12 +119,14 @@ p { color: var(--text-secondary); }
     padding: 0 40px;
     position: relative;
     z-index: 5;
+    overflow: visible;
 }
 
 .header-page-title {
     font-size: 20px;
     font-weight: 700;
     color: var(--text-primary);
+    overflow: visible;
 }
 
 .search-bar {
