@@ -3645,7 +3645,7 @@ input:checked + .settings-switch-slider:before {
     color: #4f46e5;
 }
 
-/* Multi-line CSS-only Tooltips (displays above the element with high z-index layer isolation) */
+/* Multi-line CSS-only Tooltips (displays below the element to avoid browser top boundary clipping) */
 [data-tooltip-multiline] {
     position: relative;
     cursor: pointer;
@@ -3655,7 +3655,7 @@ input:checked + .settings-switch-slider:before {
 [data-tooltip-multiline]::after {
     position: absolute;
     left: 50%;
-    transform: translate(-50%, 10px);
+    transform: translate(-50%, -10px);
     opacity: 0;
     pointer-events: none;
     transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -3664,8 +3664,8 @@ input:checked + .settings-switch-slider:before {
 
 [data-tooltip-multiline]::after {
     content: attr(data-tooltip-multiline);
-    bottom: 100%;
-    margin-bottom: 8px;
+    top: 100%;
+    margin-top: 8px;
     padding: 8px 12px;
     background: #1e293b;
     color: #ffffff;
@@ -3681,11 +3681,11 @@ input:checked + .settings-switch-slider:before {
 
 [data-tooltip-multiline]::before {
     content: '';
-    bottom: 100%;
-    margin-bottom: 4px;
-    border-width: 4px 4px 0 4px;
+    top: 100%;
+    margin-top: 4px;
+    border-width: 0 4px 4px 4px;
     border-style: solid;
-    border-color: #1e293b transparent transparent transparent;
+    border-color: transparent transparent #1e293b transparent;
 }
 
 [data-tooltip-multiline]:hover::before,
