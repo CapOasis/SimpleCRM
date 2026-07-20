@@ -940,6 +940,49 @@ function getFacebookData(url) {
     });
 }
 
+// ─── Token Refresh Logic ────────────────────────────────────────────────────
+// Facebook Page tokens sourced from a User token don't expire as long as
+// we periodically re-fetch them. This function uses the stored user token
+// to get a fresh page access token and saves it back.
+async function refreshMetaPageToken() {
+    try {
+        const { data: settingsData } = await db.from('settings').select('*')
+            .in('key', ['meta_page_id', 'meta_user_token', 'meta_connected']);
+        const config = {};
+        (settingsData || []).forEach(s => config[s.key] = s.value);
+
+        if (config.meta_connected !== 'true' || !config.meta_page_id || !config.meta_user_token) {
+            return; // Not connected or missing tokens — skip silently
+        }
+
+        console.log('[Token Refresh] Refreshing page access token for page:', config.meta_page_id);
+
+        const pageData = await getFacebookData(
+            `https://graph.facebook.com/v19.0/${config.meta_page_id}?fields=access_token&access_token=${config.meta_user_token}`
+        );
+
+        if (pageData.error) {
+            console.error('[Token Refresh] Failed to refresh page token:', pageData.error.message);
+            return;
+        }
+
+        if (pageData.access_token) {
+            await db.from('settings').upsert(
+                { key: 'meta_page_token', value: pageData.access_token },
+                { onConflict: 'key' }
+            );
+            console.log('[Token Refresh] ✅ Page access token refreshed successfully.');
+        }
+    } catch (err) {
+        console.error('[Token Refresh] Unexpected error:', err.message);
+    }
+}
+
+// Run token refresh on startup and every 12 hours to stay ahead of expiry
+refreshMetaPageToken();
+setInterval(refreshMetaPageToken, 12 * 60 * 60 * 1000); // every 12 hours
+// ────────────────────────────────────────────────────────────────────────────
+
 // Return public Meta App ID to frontend (safe to expose)
 app.get('/api/meta/app-config', (req, res) => {
     const appId = process.env.META_APP_ID;
@@ -1113,23 +1156,46 @@ app.get('/api/meta/campaigns', async (req, res) => {
     }
 });
 
+// Manual token refresh endpoint — callable from the frontend
+app.post('/api/meta/refresh-token', async (req, res) => {
+    try {
+        await refreshMetaPageToken();
+        res.json({ success: true, message: 'Page access token refreshed successfully.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // Get all leadgen forms for the connected Page
 app.get('/api/meta/forms', async (req, res) => {
     try {
-        const { data: settingsData } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_token', 'meta_page_name']);
-        const config = {};
-        (settingsData || []).forEach(s => config[s.key] = s.value);
+        const loadConfig = async () => {
+            const { data: settingsData } = await db.from('settings').select('*').in('key', ['meta_page_id', 'meta_page_token', 'meta_page_name']);
+            const config = {};
+            (settingsData || []).forEach(s => config[s.key] = s.value);
+            return config;
+        };
 
+        let config = await loadConfig();
         const pageId = config.meta_page_id;
-        const pageToken = config.meta_page_token;
         const pageName = config.meta_page_name;
 
-        if (!pageId || !pageToken) {
+        if (!pageId || !config.meta_page_token) {
             return res.json([]);
         }
 
-        const url = `https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${pageToken}&fields=id,name,status,leads_count&limit=100`;
-        const data = await getFacebookData(url);
+        const fetchForms = (token) =>
+            getFacebookData(`https://graph.facebook.com/v19.0/${pageId}/leadgen_forms?access_token=${token}&fields=id,name,status,leads_count&limit=100`);
+
+        let data = await fetchForms(config.meta_page_token);
+
+        // Auto-refresh token on expiry (OAuthException code 190) and retry once
+        if (data.error && (data.error.code === 190 || data.error.type === 'OAuthException')) {
+            console.warn('[Meta Forms] Token expired/invalid — auto-refreshing and retrying...');
+            await refreshMetaPageToken();
+            config = await loadConfig(); // re-read the fresh token
+            data = await fetchForms(config.meta_page_token);
+        }
 
         if (data.error) {
             console.error('[Meta Forms Error]', data.error);
