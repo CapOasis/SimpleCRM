@@ -555,7 +555,6 @@ input:checked + .slider:before {
     max-height: calc(100vh - 160px);
     overflow-x: auto;
     overflow-y: hidden;
-    padding-bottom: 20px;
 }
 
 .kanban-column {
