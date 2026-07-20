@@ -3691,6 +3691,95 @@ input:checked + .settings-switch-slider:before {
     transform: translate(-50%, 0);
 }
 
+/* Lead assignment profile avatars and plus button styling */
+.assignee-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
+    border: 1.5px solid var(--bg-card);
+    margin-left: -6px;
+    user-select: none;
+}
+.assignee-avatar:first-child {
+    margin-left: 0;
+}
+
+.assignee-add-btn {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #0b1528;
+    color: #ffffff;
+    border: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    margin-left: 2px;
+    padding: 0;
+}
+.assignee-add-btn:hover {
+    background: #1e2e4a;
+    transform: scale(1.05);
+}
+.assignee-add-btn:active {
+    transform: scale(0.95);
+}
+
+.assignee-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: 100%;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    z-index: 1000;
+    min-width: 170px;
+    padding: 8px 0;
+    margin-top: 6px;
+    animation: fadeIn 0.15s ease-out;
+}
+.assignee-dropdown-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 4px;
+}
+.assignee-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 8px;
+}
+.assignee-dropdown-item:hover {
+    background: var(--bg-main);
+}
+.assignee-dropdown-item .checkmark {
+    width: 14px;
+    color: var(--accent-primary);
+    font-weight: bold;
+    display: inline-block;
+}
+
 
 
 

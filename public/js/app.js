@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewSections = document.querySelectorAll('.view-section');
     let activeActionsElement = null;
     let activeActionsParent = null;
+    let cachedTeamMembers = [];
     const createAutomationBtn = document.getElementById('createAutomationBtn');
     const createWorkflowBtn = document.getElementById('createWorkflowBtn');
     const backToAutomations = document.getElementById('backToAutomations');
@@ -156,6 +157,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p style="font-size:13px; color:#7a8292; font-weight:400; margin:0;">Loading kanban board...</p>
                 </div>
             `;
+        }
+
+        if (cachedTeamMembers.length === 0) {
+            cachedTeamMembers = await fetchData('/api/team') || [];
         }
 
         const countData = await fetchData(`/api/leads/count?pipeline=${encodeURIComponent(currentPipeline)}`);
@@ -566,18 +571,108 @@ document.addEventListener('DOMContentLoaded', () => {
             leads.forEach(lead => {
                 const colBody = document.getElementById('board-' + lead.status);
                 if (colBody) {
+                    const assignees = lead.assigned_to
+                        ? lead.assigned_to.split(',').map(s => s.trim()).filter(Boolean)
+                        : [];
+
+                    const assigneeHtml = assignees.map(name => {
+                        const initials = name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+                        let hash = 0;
+                        for (let i = 0; i < name.length; i++) {
+                            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+                        }
+                        const c = (hash & 0x00FFFFFF).toString(16).toUpperCase();
+                        const color = '#' + '00000'.substring(0, 6 - c.length) + c;
+                        return `<div class="assignee-avatar" title="${escapeHtml(name)}" style="background-color: ${color}">${initials}</div>`;
+                    }).join('');
+
+                    const currentMember = JSON.parse(localStorage.getItem('crm_member') || '{}');
+                    const isAdmin = currentMember.role === 'admin';
+                    const assignButtonHtml = isAdmin
+                        ? `<button class="assignee-add-btn" title="Assign Lead"><i data-feather="plus" style="width:12px; height:12px;"></i></button>`
+                        : '';
+
                     const card = document.createElement('div');
                     card.className = 'card kanban-card';
                     card.dataset.id = lead.id;
                     card.style.flexShrink = '0';
                     card.innerHTML = `
-                        <h4 class="card-title">${lead.name}</h4>
-                        <p class="card-subtitle">${lead.phone || 'No phone'}</p>
-                        <div class="card-footer">
+                        <div class="card-header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                            <h4 class="card-title" style="margin:0; display:flex; align-items:center; gap:6px;">
+                                <i data-feather="user" style="width:14px; height:14px; color:var(--text-muted);"></i>
+                                ${lead.name}
+                            </h4>
+                            <div class="card-assignees" style="display:flex; align-items:center; gap:4px; position:relative;">
+                                ${assigneeHtml}
+                                ${assignButtonHtml}
+                            </div>
+                        </div>
+                        <p class="card-subtitle" style="margin-bottom:8px;">${lead.phone || 'No phone'}</p>
+                        <div class="card-footer" style="padding-top:8px;">
                             <span class="badge ${lead.source === 'Meta Ads' ? 'badge-meta' : 'badge-manual'}">${lead.source}</span>
                         </div>
                     `;
                     card.addEventListener('click', () => openDrawer(lead));
+                    
+                    const btn = card.querySelector('.assignee-add-btn');
+                    if (btn) {
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            
+                            document.querySelectorAll('.assignee-dropdown-menu').forEach(menu => menu.remove());
+
+                            const menu = document.createElement('div');
+                            menu.className = 'assignee-dropdown-menu';
+                            
+                            let menuHtml = `<div class="assignee-dropdown-header"><i data-feather="check" style="width:12px; height:12px; margin-right:4px;"></i> Assign</div>`;
+                            
+                            cachedTeamMembers.forEach(member => {
+                                const isAssigned = assignees.includes(member.name);
+                                menuHtml += `
+                                    <div class="assignee-dropdown-item ${isAssigned ? 'assigned' : ''}" data-name="${escapeHtml(member.name)}">
+                                        <span class="checkmark">${isAssigned ? '✓' : ''}</span>
+                                        <span>${escapeHtml(member.name)}</span>
+                                    </div>
+                                `;
+                            });
+                            menu.innerHTML = menuHtml;
+                            
+                            const container = card.querySelector('.card-assignees');
+                            container.appendChild(menu);
+                            
+                            if (window.feather) window.feather.replace();
+
+                            menu.querySelectorAll('.assignee-dropdown-item').forEach(item => {
+                                item.addEventListener('click', async (evt) => {
+                                    evt.stopPropagation();
+                                    const name = item.dataset.name;
+                                    let updatedAssignees = [...assignees];
+                                    
+                                    if (updatedAssignees.includes(name)) {
+                                        updatedAssignees = updatedAssignees.filter(n => n !== name);
+                                    } else {
+                                        updatedAssignees.push(name);
+                                    }
+                                    
+                                    const assignedToStr = updatedAssignees.join(', ');
+                                    
+                                    const response = await fetchData(`/api/leads/${lead.id}`, {
+                                        method: 'PATCH',
+                                        body: JSON.stringify({ assigned_to: assignedToStr })
+                                    });
+                                    
+                                    if (response && !response.error) {
+                                        await loadLeads();
+                                    } else {
+                                        alert("Error updating lead assignment.");
+                                    }
+                                    
+                                    menu.remove();
+                                });
+                            });
+                        });
+                    }
+
                     colBody.appendChild(card);
                 }
             });
