@@ -2229,6 +2229,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Update header page title
+        const pageTitleMap = {
+            leads:        'Leads Management',
+            dashboard:    'Dashboard Overview',
+            contacts:     'Contacts',
+            tasks:        'Tasks & Follow-ups',
+            automations:  'Automations',
+            activity:     'Activity Feed',
+            flows:        'Pipeline Flows',
+            integrations: 'Integrations',
+            team:         'Team Management',
+            account:      'Account & Settings'
+        };
+        const titleEl = document.getElementById('headerPageTitle');
+        if (titleEl) titleEl.textContent = pageTitleMap[targetView] || targetView;
+
         // Update Navigation UI active states
         navItems.forEach(nav => {
             if (nav.getAttribute('data-view') === targetView) {

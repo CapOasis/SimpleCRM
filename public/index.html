@@ -95,10 +95,8 @@
     <main class="main-wrapper">
         <!-- Global Header -->
         <header class="header">
-            <div class="search-bar">
-                <i data-feather="search"></i>
-                <input type="text" id="globalSearchInput" placeholder="Search leads by name, email, phone..."
-                    autocomplete="off">
+            <div class="header-page-title">
+                <span id="headerPageTitle">Leads Management</span>
             </div>
 
             <div class="user-profile">
@@ -119,6 +117,10 @@
                         <h1>Leads Management</h1>
                     </div>
                     <div class="section-actions">
+                        <div class="search-bar leads-search-bar">
+                            <i data-feather="search"></i>
+                            <input type="text" id="globalSearchInput" placeholder="Search by name, email, phone..." autocomplete="off">
+                        </div>
                         <div class="view-controls">
                             <button class="btn view-toggle active" data-target="leads-table-view"><i
                                     data-feather="list"></i></button>

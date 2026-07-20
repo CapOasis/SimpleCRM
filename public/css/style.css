@@ -121,9 +121,19 @@ p { color: var(--text-secondary); }
     z-index: 5;
 }
 
+.header-page-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
 .search-bar {
     position: relative;
     width: 320px;
+}
+
+.leads-search-bar {
+    width: 260px;
 }
 
 .search-bar input {
