@@ -482,6 +482,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    function formatCardDate(dateStr) {
+        if (!dateStr) return '-';
+        const d = new Date(dateStr);
+        if (isNaN(d.getTime())) return '-';
+        const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+        const day = d.getDate();
+        const month = months[d.getMonth()];
+        let hours = d.getHours();
+        const minutes = d.getMinutes();
+        const ampm = hours >= 12 ? 'pm' : 'am';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        const minStr = minutes < 10 ? '0' + minutes : minutes;
+        return `${day} ${month} ${hours}:${minStr}${ampm}`;
+    }
+
     function renderLeads(leads) {
         // --- 1. Render Table View ---
         const tbody = document.getElementById('leads-table-body');
@@ -561,12 +577,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create columns based on currentStages
             currentStages.forEach(stage => {
                 const displayStageName = stage.name.includes(':') ? stage.name.split(':')[1] : stage.name;
+                
+                // Calculate count and total value for this column
+                const stageLeads = leads.filter(l => l.status === stage.name);
+                const count = stageLeads.length;
+                const totalValue = stageLeads.reduce((sum, l) => sum + (parseFloat(l.value) || 0), 0);
+                
                 const column = document.createElement('div');
                 column.className = 'kanban-column';
                 column.innerHTML = `
-                    <div class="column-header">
-                        <div><span class="status-dot" style="background: ${stage.color || '#3b82f6'}"></span> ${displayStageName.charAt(0).toUpperCase() + displayStageName.slice(1)}</div>
-                        <span class="column-count" id="count-${stage.name}">0</span>
+                    <div class="column-header" style="display:flex; flex-direction:column; align-items:flex-start; gap:4px; padding:16px 20px; border-bottom:1px solid var(--border-color);">
+                        <div style="font-weight:700; font-size:15px; color:var(--text-primary); display:flex; align-items:center; gap:6px;">
+                            <span class="status-dot" style="background: ${stage.color || '#3b82f6'}; width:8px; height:8px; border-radius:50%; display:inline-block;"></span>
+                            ${displayStageName.charAt(0).toUpperCase() + displayStageName.slice(1)}
+                        </div>
+                        <div class="column-subtext" style="font-size:12px; color:var(--text-muted); font-weight:500;">
+                            ${count} Leads ₹${totalValue.toFixed(2)}
+                        </div>
                     </div>
                     <div class="column-body" id="board-${stage.name}"></div>
                 `;
@@ -598,13 +625,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         ? `<button class="assignee-add-btn" title="Assign Lead"><i data-feather="plus" style="width:12px; height:12px;"></i></button>`
                         : '';
 
+                    const cleanPhone = (lead.phone || '').replace(/\D/g, '');
+                    const waUrl = cleanPhone ? `https://wa.me/${cleanPhone}` : '#';
+
                     const card = document.createElement('div');
                     card.className = 'card kanban-card';
                     card.dataset.id = lead.id;
+                    card.dataset.value = lead.value || 0;
                     card.style.flexShrink = '0';
+                    
+                    // Match top border with column stage color
+                    const stageObj = currentStages.find(s => s.name === lead.status);
+                    card.style.borderTop = `3px solid ${stageObj ? (stageObj.color || '#3b82f6') : '#3b82f6'}`;
+                    
                     card.innerHTML = `
-                        <div class="card-header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                            <h4 class="card-title" style="margin:0; display:flex; align-items:center; gap:6px;">
+                        <div class="card-header-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                            <h4 class="card-title" style="margin:0; display:flex; align-items:center; gap:6px; font-weight:700; font-size:14px;">
                                 <i data-feather="user" style="width:14px; height:14px; color:var(--text-muted);"></i>
                                 ${lead.name}
                             </h4>
@@ -613,12 +649,55 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${assignButtonHtml}
                             </div>
                         </div>
-                        <p class="card-subtitle" style="margin-bottom:8px;">${lead.phone || 'No phone'}</p>
-                        <div class="card-footer" style="padding-top:8px;">
-                            <span class="badge ${lead.source === 'Meta Ads' ? 'badge-meta' : 'badge-manual'}">${lead.source}</span>
+                        <div class="card-detail-item" style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:6px; color:var(--text-secondary);">
+                            <i data-feather="phone" style="width:12px; height:12px; color:var(--text-muted);"></i>
+                            <span>${lead.phone || 'No phone'}</span>
+                        </div>
+                        <div class="card-detail-item" style="display:flex; align-items:center; gap:6px; font-size:12px; margin-bottom:16px; color:var(--text-secondary);">
+                            <i data-feather="mail" style="width:12px; height:12px; color:var(--text-muted);"></i>
+                            <span class="card-email-text" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:180px;" title="${escapeHtml(lead.email || '')}">${lead.email || 'No email'}</span>
+                        </div>
+                        <div class="card-bottom-row" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; border-top: 1px solid var(--border-color); padding-top:12px;">
+                            <div class="card-value" style="font-size:16px; font-weight:700; color:#22c55e;">
+                                ₹${parseFloat(lead.value || 0).toFixed(2)}
+                            </div>
+                            <div class="card-actions" style="display:flex; align-items:center; gap:8px;">
+                                <button class="card-action-btn edit-lead-btn" title="Edit Lead" style="background:none; border:none; padding:4px; cursor:pointer; color:var(--text-muted); display:inline-flex; align-items:center;"><i data-feather="edit" style="width:14px; height:14px;"></i></button>
+                                <button class="card-action-btn add-task-btn" title="Add Task" style="background:none; border:none; padding:4px; cursor:pointer; color:var(--text-muted); display:inline-flex; align-items:center;"><i data-feather="check-square" style="width:14px; height:14px;"></i></button>
+                                <button class="card-action-btn calendar-btn" title="Schedule Follow-up" style="background:none; border:none; padding:4px; cursor:pointer; color:var(--text-muted); display:inline-flex; align-items:center;"><i data-feather="calendar" style="width:14px; height:14px;"></i></button>
+                                ${cleanPhone ? `
+                                    <a class="card-action-btn wa-btn" href="${waUrl}" target="_blank" title="Chat on WhatsApp" style="background:none; border:none; padding:4px; cursor:pointer; color:#22c55e; display:inline-flex; align-items:center;"><i data-feather="message-circle" style="width:14px; height:14px; color:#22c55e;"></i></a>
+                                ` : ''}
+                            </div>
+                        </div>
+                        <div class="card-timestamps" style="display:flex; justify-content:space-between; align-items:center; font-size:10px; color:var(--text-muted); font-weight:500;">
+                            <span>Created:${formatCardDate(lead.created_at)}</span>
+                            <span>Updated:${formatCardDate(lead.updated_at || lead.created_at)}</span>
                         </div>
                     `;
                     card.addEventListener('click', () => openDrawer(lead));
+
+                    // Stop click propagation on action buttons to prevent opening the drawer
+                    card.querySelectorAll('.card-action-btn').forEach(actBtn => {
+                        actBtn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                        });
+                    });
+
+                    card.querySelector('.edit-lead-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openDrawer(lead);
+                    });
+
+                    card.querySelector('.add-task-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openAddTaskModal();
+                    });
+
+                    card.querySelector('.calendar-btn').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        openDrawer(lead);
+                    });
                     
                     const btn = card.querySelector('.assignee-add-btn');
                     if (btn) {
@@ -708,6 +787,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                                 avatarsContainer.insertBefore(tempDiv.firstChild, btnEl);
                                             }
                                         }
+                                        updateColumnCounts();
                                     } else {
                                         alert("Error updating lead assignment.");
                                     }
@@ -1005,9 +1085,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateColumnCounts() {
         document.querySelectorAll('.kanban-column').forEach(col => {
-            const count = col.querySelectorAll('.kanban-card').length;
-            const countEl = col.querySelector('.column-count');
-            if (countEl) countEl.textContent = count;
+            const cards = col.querySelectorAll('.kanban-card');
+            const count = cards.length;
+            let totalVal = 0;
+            cards.forEach(card => {
+                totalVal += parseFloat(card.dataset.value) || 0;
+            });
+            const subtextEl = col.querySelector('.column-subtext');
+            if (subtextEl) {
+                subtextEl.textContent = `${count} Leads ₹${totalVal.toFixed(2)}`;
+            }
         });
     }
 
