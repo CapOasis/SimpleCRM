@@ -112,11 +112,9 @@
 
             <!-- LEADS VIEW (Default Active) -->
             <section id="leads" class="view-section active">
-                <div class="section-header">
-                    <div class="section-title">
-                        <h1>Leads Management</h1>
-                    </div>
+                <div class="section-header" style="justify-content: flex-end;">
                     <div class="section-actions">
+
                         <div class="search-bar leads-search-bar">
                             <i data-feather="search"></i>
                             <input type="text" id="globalSearchInput" placeholder="Search by name, email, phone..." autocomplete="off">
@@ -209,16 +207,9 @@
 
             <!-- FLOWS VIEW -->
             <section id="flows" class="view-section">
-                <div class="section-header">
-                    <div class="section-title">
-                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
-                        Pipeline Flows
-                        <span class="info-btn" data-tooltip-multiline="Customize your lead journey. Drag to reorder stages between New and Closed." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
-                <div style="display:flex; gap:8px; align-items:center;">
+                <div class="section-header" style="justify-content: flex-end;">
+                    <div style="display:flex; gap:8px; align-items:center;">
+
                         <select id="flowsPipelineSelect" class="btn btn-secondary" style="height:36px; padding:0 12px; font-size:13px; font-weight:600; border-color: var(--primary-color); color: var(--primary-color); background: var(--bg-card);">
                         </select>
                         <button class="btn btn-primary" onclick="openAddStageModal()">
@@ -279,11 +270,9 @@
             <!-- AUTOMATIONS VIEW -->
             <!-- AUTOMATIONS VIEW -->
             <section id="automations" class="view-section">
-                <div class="section-header" id="automationsMainHeader">
-                    <div class="section-title">
-                        <h1>Automations</h1>
-                    </div>
+                <div class="section-header" id="automationsMainHeader" style="justify-content: flex-end;">
                     <div class="section-actions" id="automationHeaderActions">
+
                         <div class="dropdown" style="position: relative;">
                             <button class="btn btn-primary" id="createDropdownBtn" style="gap: 6px;">
                                 <i data-feather="plus"></i> Create <i data-feather="chevron-down"
@@ -677,16 +666,9 @@
 
         <!-- DASHBOARD VIEW -->
         <section id="dashboard" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
-                        Dashboard Overview
-                        <span class="info-btn" data-tooltip-multiline="High level insights of your CRM pipeline and lead conversion." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
+            <div class="section-header" style="justify-content: flex-end;">
                 <div class="section-actions">
+
                     <select id="dashboardRange" class="btn btn-secondary" style="padding: 0 12px; height: 40px;">
                         <option value="7d">Last 7 Days</option>
                         <option value="30d">Last 30 Days</option>
@@ -768,18 +750,8 @@
 
         <!-- INTEGRATIONS VIEW -->
         <section id="integrations" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
-                        Integrations
-                        <span class="info-btn" data-tooltip-multiline="Configure your lead sources, data mapping, and communication providers." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
-            </div>
-
             <!-- Integrations Sub-Nav -->
+
             <div class="sub-nav">
                 <div class="sub-nav-item active" data-tab="sources">Lead Sources <span class="info-btn" data-tooltip-multiline="Manage your active Facebook Lead Generation forms, view page names, and map fields." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
                 <div class="sub-nav-item" data-tab="facebook-forms">Facebook Forms <span class="info-btn" data-tooltip-multiline="View all active Facebook Lead Ad forms connected to your Meta account and their sync status." style="cursor:pointer;display:inline-flex;align-items:center;vertical-align:middle;margin-left:3px;color:var(--text-muted);opacity:0.6;"><i data-feather="info" style="width:13px;height:13px;"></i></span></div>
@@ -992,16 +964,7 @@
 
         <!-- ACTIVITY VIEW -->
         <section id="activity" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
-                        Activity Feed
-                        <span class="info-btn" data-tooltip-multiline="A real-time log of all automations, status changes, and incoming leads." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
-            </div>
+
             <div class="card">
                 <div id="activity-feed-container" class="timeline" style="padding: 32px 40px;">
                     <!-- Logs will be rendered here -->
@@ -1012,16 +975,9 @@
 
         <!-- TEAM VIEW -->
         <section id="team" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1 style="display: inline-flex; align-items: center; gap: 8px;">
-                        Team Management
-                        <span class="info-btn" data-tooltip-multiline="Manage your team members, credentials, and their roles/access permissions in the CRM." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
+            <div class="section-header" style="justify-content: flex-end;">
                 <div style="display:flex; gap:8px;">
+
                     <button class="btn btn-primary" onclick="toggleAddTeamForm()">
                         <i data-feather="user-plus"></i> Add Member
                     </button>
@@ -1036,11 +992,9 @@
 
         <!-- CONTACTS VIEW -->
         <section id="contacts" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1>Contacts</h1>
-                </div>
+            <div class="section-header" style="justify-content: flex-end;">
                 <div class="section-actions">
+
                     <div class="search-bar" style="width: 260px;">
                         <i data-feather="search"></i>
                         <input type="text" id="contactSearchInput" placeholder="Search contacts..." autocomplete="off">
@@ -1075,11 +1029,9 @@
 
         <!-- TASKS VIEW -->
         <section id="tasks" class="view-section">
-            <div class="section-header">
-                <div class="section-title">
-                    <h1>Tasks &amp; Follow-ups</h1>
-                </div>
+            <div class="section-header" style="justify-content: flex-end;">
                 <div class="section-actions">
+
                     <select id="filterTaskStatus" class="btn btn-secondary"
                         style="height:36px; padding:0 10px; font-size:13px;">
                         <option value="">All Tasks</option>
@@ -1110,17 +1062,7 @@
 
         <!-- ACCOUNT & SETTINGS VIEW -->
         <section id="account" class="view-section">
-            <div class="section-header"
-                style="margin-bottom: 32px; max-width: 760px; margin-left: auto; margin-right: auto;">
-                <div class="section-title">
-                    <h1 style="font-size: 24px; font-weight: 800; color: #0f172a; margin-bottom: 6px; display: inline-flex; align-items: center; gap: 8px;">
-                        Account &amp; Settings
-                        <span class="info-btn" data-tooltip-multiline="Manage your security credentials, profile information, and interface preferences." style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s; font-size: 14px; font-weight: normal;">
-                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
-                        </span>
-                    </h1>
-                </div>
-            </div>
+
 
             <div class="settings-grid">
                 <!-- 1. Profile & Preferences -->

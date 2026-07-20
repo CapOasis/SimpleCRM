@@ -2229,21 +2229,36 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Update header page title
+        // Update header page title with dynamic info tooltip icon
         const pageTitleMap = {
-            leads:        'Leads Management',
-            dashboard:    'Dashboard Overview',
-            contacts:     'Contacts',
-            tasks:        'Tasks & Follow-ups',
-            automations:  'Automations',
-            activity:     'Activity Feed',
-            flows:        'Pipeline Flows',
-            integrations: 'Integrations',
-            team:         'Team Management',
-            account:      'Account & Settings'
+            leads:        { title: 'Leads Management', tooltip: '' },
+            dashboard:    { title: 'Dashboard Overview', tooltip: 'High level insights of your CRM pipeline and lead conversion.' },
+            contacts:     { title: 'Contacts', tooltip: '' },
+            tasks:        { title: 'Tasks & Follow-ups', tooltip: '' },
+            automations:  { title: 'Automations', tooltip: '' },
+            activity:     { title: 'Activity Feed', tooltip: 'A real-time log of all automations, status changes, and incoming leads.' },
+            flows:        { title: 'Pipeline Flows', tooltip: 'Customize your lead journey. Drag to reorder stages between New and Closed.' },
+            integrations: { title: 'Integrations', tooltip: 'Configure your lead sources, data mapping, and communication providers.' },
+            team:         { title: 'Team Management', tooltip: 'Manage your team members, credentials, and their roles/access permissions in the CRM.' },
+            account:      { title: 'Account & Settings', tooltip: 'Manage your security credentials, profile information, and interface preferences.' }
         };
         const titleEl = document.getElementById('headerPageTitle');
-        if (titleEl) titleEl.textContent = pageTitleMap[targetView] || targetView;
+        if (titleEl) {
+            const pageData = pageTitleMap[targetView] || { title: targetView, tooltip: '' };
+            if (pageData.tooltip) {
+                titleEl.innerHTML = `
+                    <h2 style="display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: 20px; font-weight: 700;">
+                        ${pageData.title}
+                        <span class="info-btn" data-tooltip-multiline="${pageData.tooltip}" style="cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: var(--text-muted); opacity: 0.7; transition: opacity 0.2s;">
+                            <i data-feather="info" style="width: 16px; height: 16px;"></i>
+                        </span>
+                    </h2>
+                `;
+            } else {
+                titleEl.textContent = pageData.title;
+            }
+            if (window.feather) window.feather.replace();
+        }
 
         // Update Navigation UI active states
         navItems.forEach(nav => {
