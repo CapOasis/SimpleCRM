@@ -2846,6 +2846,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isAuthorized = currentMember.role === 'admin' ||
             targetView === 'account' ||
+            targetView === 'lateron' ||
             (currentMember.permissions && currentMember.permissions.includes(targetView));
 
         if (!isAuthorized) {
@@ -2874,7 +2875,8 @@ document.addEventListener('DOMContentLoaded', () => {
             flows:        { title: 'Pipeline Flows', tooltip: 'Customize your lead journey. Drag to reorder stages between New and Closed.' },
             integrations: { title: 'Integrations', tooltip: 'Configure your lead sources, data mapping, and communication providers.' },
             team:         { title: 'Team Management', tooltip: 'Manage your team members, credentials, and their roles/access permissions in the CRM.' },
-            account:      { title: 'Account & Settings', tooltip: 'Manage your security credentials, profile information, and interface preferences.' }
+            account:      { title: 'Account & Settings', tooltip: 'Manage your security credentials, profile information, and interface preferences.' },
+            lateron:      { title: 'LaterOn Dashboard', tooltip: 'Your personal link and newsletter manager.' }
         };
         const titleEl = document.getElementById('headerPageTitle');
         if (titleEl) {
@@ -4823,8 +4825,8 @@ function applySidebarPermissions(member) {
 
     document.querySelectorAll('.nav-item[data-view]').forEach(item => {
         const view = item.getAttribute('data-view');
-        // Account view is always accessible
-        if (view === 'account') {
+        // Account and LaterOn views are always accessible
+        if (view === 'account' || view === 'lateron') {
             item.style.display = 'flex';
             return;
         }
